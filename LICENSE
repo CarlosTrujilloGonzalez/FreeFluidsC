@@ -1,8 +1,8 @@
 The FreeFluids soft, developed by Carlos Trujillo Gonzalez, can be 
 distributed and modified under the GNU general public license version 3 that follows.
 The soft uses also parts, normally DLLs, under different licenses, as the 
-NLOPT optimizer, or  Qt for graphical interfaces, the licensing conditions 
-for these softs are found in the same folder than they are.
+NLOPT optimizer, the GCC tuntime, or Qt for the graphical interface, the licensing conditions 
+for these softs are found in the licenses folder.
 
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
