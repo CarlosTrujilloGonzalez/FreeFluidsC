@@ -97,8 +97,16 @@ void CALLCONV FF_CorrelationResult(const int *eq,const double coef[],const int *
             y[i]=coef[0]+coef[1]*pow(Tm,0.35)+coef[2]*pow(Tm,0.666667)+coef[3]*Tm+coef[4]*pow(Tm,1.333333);
         }
         break;
+    case FF_PPDS9://e*exp[a*((c-T)/(T-d))^1/3+b*((c-T)/(T-d))^4/3]
+        for (i=0;i<*nPoints;i++){
+
+            y[i]=coef[4]*exp(coef[0]*pow((coef[2]-x[i])/(x[i]-coef[3]),0.33333)+coef[1]*pow((coef[2]-x[i])/(x[i]-coef[3]),1.33333));
+        }
+        break;
     case FF_Wilhoit://Wilhoit equation Cp0 J/mol·K (8 coefficients)
         for (i=0;i<*nPoints;i++){
+            //if (x[i]>coef[7]) Tm=(x[i]-coef[7])/(x[i]+coef[6]);
+            //else Tm=0;
             Tm=(x[i]-coef[7])/(x[i]+coef[6]);
             y[i]=R*(coef[0] + coef[1]/pow(x[i],2)*exp(-coef[2]/x[i]) + coef[3]*pow(Tm,2) + (coef[4] - coef[5] /pow((x[i] -coef[7]),2))*pow(Tm,8));
         }
@@ -214,6 +222,9 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
     case 4://DIPPR107 Cp in J/Kmol·K
         eq=FF_DIPPR107;
         break;
+    case 5://Wilhoit Cp0 J/mol·K
+        eq=FF_Wilhoit;
+        break;
     case 7://Cooper Cp0 J/mol·K
         eq=FF_Cooper;
         break;
@@ -227,6 +238,7 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
         eq=FF_ChemSep16;
         break;
     case 22: //Antoine base 10 in C and mmHg
+    case 36: //Antoine base 10 in K and cP
         eq=FF_Antoine1;
         break;
     case 23://Antoine base e in K and Pa
@@ -248,6 +260,9 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
     case 34://Cheric viscosity in cP
         eq=FF_ChericVisc;
         break;
+    case 37://PPDS9 in Pa·s
+        eq=FF_PPDS9;
+        break;
     case 43://PCWIN liquid density in kgr/m3
         eq=FF_PCWIN;
         break;
@@ -255,6 +270,7 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
         eq=FF_Rackett;
         break;
     case 44://DIPPR116 liquid density in mol/dm3
+    case 46://DIPPR116 liquid density in kg/m3
         eq=FF_DIPPR116;
         break;
     case 101:
@@ -271,6 +287,7 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
         for (i=0;i<*nPoints;i++) y[i]=y[i]*1e3;
         break;
     case 2://DIPPR 100 Cp in J/mol·K
+    case 5://Wilhoit Cp0 J/mol·K
     case 7://Cooper Cp0 J/mol·K
     case 8://Jaechske Cp0 J/mol·K
     case 15://DIPPR 100 Liquid Cp in J/mol·K
@@ -301,6 +318,7 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
     case 31://Extended Andrade 1 in cP
     case 32://Extended Andrade 2 in cP
     case 34://Cheric viscosity in cP
+    case 36://Antoine1 viscosity in cP
     case 63://DIPPR 100 Liquid surface tension dyna/cm
         for (i=0;i<*nPoints;i++) y[i]=y[i]*1e-3;
         break;

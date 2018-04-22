@@ -26,7 +26,7 @@
 //============================================================
 #include <stdio.h>
 #include <math.h>
-#include "nlopt.h"
+#include <nlopt.h>
 #include "FFbasic.h"
 #include "FFtools.h"
 
@@ -464,11 +464,10 @@ double CALLCONV FF_SaftPvRhoError(unsigned nVar, const double coef[], double gra
 //Determines the error of a cubic EOS, using the given coefficients, and the real value supplied inside data
 EXP_IMP double CALLCONV FF_CubicPvRhoError(unsigned nVar, const double coef[], double grad[],  FF_EOSPvRhoData *data)
 {
-    //printf("eos:%u \n",data->eos);
     unsigned i;
     double Vp,VpDiff=0,error=0;
-     FF_CubicEOSdata cubicData;
-     FF_CubicParam param;
+    FF_CubicEOSdata cubicData;
+    FF_CubicParam param;
     enum FF_EosType eos=FF_CubicType;
     cubicData.eos=data->eos;
     cubicData.MW=data->MW;
@@ -476,7 +475,6 @@ EXP_IMP double CALLCONV FF_CubicPvRhoError(unsigned nVar, const double coef[], d
     switch (data->eos){
     case FF_PR76:
     case FF_PR78:
-        //printf("hola soy cubic error de FF_PR76/78\n");
         cubicData.Tc=coef[0];
         cubicData.Pc=coef[1];
         cubicData.w=coef[2];
@@ -487,7 +485,6 @@ EXP_IMP double CALLCONV FF_CubicPvRhoError(unsigned nVar, const double coef[], d
         cubicData.k4=0;
         break;
     case FF_PRFIT3:
-        //printf("hola soy cubic error de FF_PRFIT3\n");
         cubicData.Tc=data->Tc;
         cubicData.Pc=data->Pc;
         cubicData.w=data->w;
@@ -498,7 +495,6 @@ EXP_IMP double CALLCONV FF_CubicPvRhoError(unsigned nVar, const double coef[], d
         cubicData.k4=0;
         break;
     case FF_PRFIT4:
-        //printf("Cubic error: b:%f a:%f fw:%f Tc:%f\n",coef[0],coef[1],coef[2],coef[3]);
         cubicData.Tc=data->Tc;
         cubicData.Pc=data->Pc;
         cubicData.w=data->w;
@@ -507,10 +503,8 @@ EXP_IMP double CALLCONV FF_CubicPvRhoError(unsigned nVar, const double coef[], d
         cubicData.k2=coef[1];
         cubicData.k3=coef[2];
         cubicData.k4=coef[3];
-        //printf("Cubic error function parameters: MW:%f Tc:%f w:%f k4:%f k1:%f k2:%f k3:%f\n",cubicData.MW,cubicData.Tc,cubicData.w,cubicData.k4,cubicData.k1,cubicData.k2,cubicData.k3);
         break;
     default:
-        //printf("hola soy cubic que no busca densidad\n");
         cubicData.Tc=data->Tc;
         cubicData.Pc=data->Pc;
         cubicData.w=data->w;
@@ -523,49 +517,6 @@ EXP_IMP double CALLCONV FF_CubicPvRhoError(unsigned nVar, const double coef[], d
         //printf("k1:%f k2:%f k3:%f\n",coef[0],coef[1],coef[2]);
         break;
     }
-    //printf("Cubic error function parameters: MW:%f Tc:%f Pc:%f w:%f VdWV:%f k1:%f k2:%f k3:%f\n",cubicData.MW,cubicData.Tc,cubicData.Pc,cubicData.w,cubicData.VdWV,cubicData.k1,cubicData.k2,cubicData.k3);
-
-    /*
-    //alpha value constraint
-    double Tr,Tx,alphaBase,alphaDiff=0;
-    double diff=0;//It will be used to find the maximum alpha difference
-    for (i=0;i<data->nPoints;i++)
-    {
-        Tr=data->points[i][0]/data->Tc;
-        Tx = 1-pow(Tr,0.5);
-        alphaBase=pow(1+(0.37464+1.54226*data->w-0.26992*pow(data->w,2))*Tx,2);//This the reference alpha, in this case for PR eos
-        switch (data->eos){
-        case FF_PR78:
-            Tr=data->points[i][0]/coef[0];
-            Tx = 1-pow(Tr,0.5);
-            alphaDiff=fabs(pow(1+(0.37464+1.54226*coef[2]-0.26992*pow(coef[2],2))*Tx,2)-alphaBase)/alphaBase;
-            break;
-        case FF_PRSV1:
-            alphaDiff=fabs((pow((1+(0.378893+1.4897153*data->w-0.17131848*pow(data->w,2)+0.0196554*pow(data->w,3))*Tx+coef[0]*(1-Tr)*(0.7-Tr)),2)-alphaBase)/alphaBase);
-            break;
-        case FF_PRSOF:
-            alphaDiff=fabs((Tr*(1+coef[0]/(coef[1]-1)*(1-pow(Tr,(1-coef[1]))))-alphaBase)/alphaBase);
-            break;
-        case FF_PRMC:
-            alphaDiff=fabs((pow(1+coef[0]*Tx+coef[1]*pow(Tx,2)+coef[3]*pow(Tx,3),2)-alphaBase)/alphaBase);
-            break;
-        case FF_PRTWU91:
-        case FF_PRvTWU91:
-            alphaDiff=fabs((pow(Tr,coef[2]*(coef[1]-1))*exp(coef[0]*(1-pow(Tr,(coef[1]*coef[2]))))-alphaBase)/alphaBase);
-            break;
-        //case FF_PRFIT4:
-        //    alphaBase=pow(1+(0.37464+1.54226*data->w-0.26992*pow(data->w,2))*Tx,2);
-        //    alphaDiff=fabs((pow(1+coef[2]*(1-pow(data->points[i][0]/coef[3],0.5)),2)-alphaBase)/alphaBase);
-        //    break;
-        case FF_SRKTWU91:
-            alphaBase=pow(1+(0.48 + 1.574 * data->w - 0.176 * pow(data->w,2))*Tx,2);
-            alphaDiff=fabs((pow(Tr,coef[2]*(coef[1]-1))*exp(coef[0]*(1-pow(Tr,(coef[1]*coef[2]))))-alphaBase)/alphaBase);
-            break;
-        }
-        if (alphaDiff > diff) diff=alphaDiff;
-    }
-    if (diff>.1) return 4.0;
-    //printf("alphadiff: %f\n",diff);*/
 
     //Liquid density value constraint
     char option='l',state;
@@ -577,42 +528,28 @@ EXP_IMP double CALLCONV FF_CubicPvRhoError(unsigned nVar, const double coef[], d
             FF_ThetaDerivCubic(&data->points[i][0],&cubicData,&param);
             FF_VfromTPcubic(&data->points[i][0],&data->points[i][1],&param,&option,answerL,answerG,&state);
             densDiff=densDiff+fabs((cubicData.MW*1e-3/answerL[0]-data->points[i][2])/data->points[i][2]);
-            //printf("densDiff:%f\n",fabs(cubicData.MW*1e-3/answerL[0]-data->points[i][2]));
         }
         densDiff=densDiff/data->nPoints;
-        //printf("densDiff:%f\n",densDiff);
-        if (densDiff>data->ldensFilter) return 2.0;
+        if (densDiff>data->ldensFilter) return 2.0;//if density error is higher than the constraint we return a 200% error in order to reject the coefficients
     }
     static double minError=2;//used to actualize partial errors when there is an improvement in the total error found
-    static unsigned int eosUsed=9999;//used to actualize partial errors when changing the eos used
+    static unsigned int eosUsed=9999;//used to actualize partial errors when changing the used eos
 
     for (i=0;i<data->nPoints;i++){
-        //printf("Cubic error function parameters: MW:%f Tc:%f Pc:%f w:%f c:%f k1:%f k2:%f k3:%f\n",cubicData.MW,cubicData.Tc,cubicData.Pc,cubicData.w,cubicData.c,cubicData.k1,cubicData.k2,cubicData.k3);
         FF_VpEOS(&eos,&data->points[i][0],&cubicData,&Vp);
         VpDiff=VpDiff+fabs((Vp-data->points[i][1])/data->points[i][1]);
-        //printf("T:%f Vp:%f VpEos:%f VpDiff:%f\n",data->points[i][0],data->points[i][1],Vp,fabs((Vp-data->points[i][1])/data->points[i][1]));
-        if ((data->eos==FF_PR78)||(data->eos==FF_PRFIT3)||(data->eos==FF_PRFIT4)){
-            FF_VfromTPeos(&eos,&data->points[i][0],&data->points[i][1],&cubicData,&option,answerL,answerG,&state);
-            //printf("state:%c Vl:%f\n",state,answerL[0]);
-            densDiff=densDiff+fabs((cubicData.MW*1e-3/answerL[0]-data->points[i][2])/data->points[i][2]);
-            //printf("Dens:%f densDiff:%f\n",data->points[i][2],fabs((cubicData.MW*1e-3/answerL[0]-data->points[i][2]))/data->points[i][2]);
-        }
-        else densDiff=0;
-
     }
     VpDiff=VpDiff/data->nPoints;
-    densDiff=densDiff/data->nPoints;
-    if ((data->eos==FF_PR78)||(data->eos==FF_PRFIT3)||(data->eos==FF_PRFIT4)) error=0.5*VpDiff+0.5*densDiff;
+    if ((data->eos==FF_PR78)||(data->eos==FF_PRFIT3)||(data->eos==FF_PRFIT4)) error=0.6*VpDiff+0.4*densDiff;
     else error=VpDiff;
-    //printf("Error:%f\n",error);
+    if (isnan(error)) return 4.0;
     if ((minError>error)||!(eosUsed==data->eos)){
         minError=error;
         eosUsed=data->eos;
         data->vpError=VpDiff;
         if ((data->eos==FF_PR78)||(data->eos==FF_PRFIT3)||(data->eos==FF_PRFIT4)) data->ldensError=densDiff;
         else data->ldensError=+HUGE_VALF;
-        data->ldensError=densDiff;
-        switch (data->eos){
+        switch (data->eos){//We print the new optimal values found
         case FF_PR76:
         case FF_PR78:
             printf("Tc:%f Pc:%f w:%f\n",cubicData.Tc,cubicData.Pc,cubicData.w);
@@ -689,10 +626,6 @@ EXP_IMP double CALLCONV FF_CubicEOSAlphaConstraint(unsigned nVar, const double c
 //Optimizer function for EOS parameters. Recibes: number of variables to optimize, bounds, data to pass to the error calculation function. Returns optimized values and error
 void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double ub[],char enforceLimits[], FF_EOSPvRhoData*data,double var[],double *error)
 {
-    //printf("lb: %f %f %f %f %f\n",lb[0],lb[1],lb[2],lb[3],lb[4]);
-    //printf("ub: %f %f %f %f %f\n",ub[0],ub[1],ub[2],ub[3],ub[4]);
-    //printf("var: %f %f %f %f %f\n",var[0],var[1],var[2],var[3],var[4]);
-    //printf("n: %u nData: %u \n",nVar,data->nPoints);
     double rLb[nVar],rUb[nVar],rVar[nVar];
     nlopt_algorithm alg,algL;
     nlopt_opt opt,optL;
@@ -704,11 +637,9 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
             rVar[i]=var[i];
         }
     }
-    //printf("eos:%i\n",data->eos);
     switch (data->eos){
-    case FF_PR76:
+    case FF_PR76://optimal Tc,Pc and w will be calculated
     case FF_PR78:
-        //printf("hola soy PR\n");
         nVar=3;
         lb[0]=0.9*data->Tc;//will replace Tc
         ub[0]=1.1*data->Tc;
@@ -721,7 +652,6 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
         var[2]=data->w;
         break;
     case FF_PRSV1:
-        //printf("hola soy PRSV1\n");
         nVar=1;
         lb[0]=-1;
         ub[0]=1;
@@ -766,7 +696,6 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
         break;
     case FF_PRMC:
     case FF_SRKMC:
-        //printf("hola soy MC\n");
         nVar=3;
         lb[0]=0.3;
         ub[0]=1.6;
@@ -791,8 +720,7 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
         var[1]=0.9;
         var[2]=1.6;
         break;
-    case FF_PRFIT3:
-        printf("hola soy FF_PRFIT3\n");
+    case FF_PRFIT3://will optimize a,Tc and k1, being k1 the parameter used in the Peng-Robinson Stryjeck-Vera Theta calculation
         nVar=3;
         lb[0]=0.7*0.45724 * pow(R*data->Tc,2)/ data->Pc;;//equivalent to a
         ub[0]=1.3 * pow(R*data->Tc,2)/ data->Pc;
@@ -803,12 +731,10 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
         var[0]=0.45724 * pow(R*data->Tc,2)/ data->Pc;
         var[1]=data->Tc;
         var[2]=0;
-        printf("Inicio: a:%f Tc:%f k1:%f\n",var[0],var[1],var[2]);
         break;
-    case FF_PRFIT4:
-        //printf("hola soy PRFIT4\n");
+    case FF_PRFIT4://Will optimize a,b,Tc and w regarding liquid density and vapor pressure
         nVar=4;
-        lb[0]=0.7*0.0778 * R * data->Tc / data->Pc;//equivalent to b//1.5e-5;//equivalent to b
+        lb[0]=0.7*0.0778 * R * data->Tc / data->Pc;//equivalent to b
         ub[0]=1.2*0.0778 * R * data->Tc / data->Pc;
         lb[1]=0.7*0.45724 * pow(R*data->Tc,2)/ data->Pc;//equivalent to a
         ub[1]=1.3*0.45724 * pow(R*data->Tc,2)/ data->Pc;
@@ -820,10 +746,8 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
         var[1]=0.45724 * pow(R*data->Tc,2)/ data->Pc;//equivalent to a
         var[2]=data->w;//equivalent to w
         var[3]=data->Tc;//equivalent to Tc
-        //printf("Inicio: b:%f a:%f fw:%f Tc:%f\n",var[0],var[1],var[2],var[3]);
         break;
     case FF_PRFIT4B:
-        printf("hola soy PRFIT4B\n");
         nVar=4;
         lb[0]=-1;
         ub[0]=1;
@@ -837,7 +761,6 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
         var[1]=data->Tc;
         var[2]=data->Pc;
         var[3]=data->w;
-        printf("Inicio: b:%f a:%f fw:%f Tc:%f\n",var[0],var[1],var[2],var[3]);
         break;
     case FF_PRvTWU91:
         nVar=3;
@@ -866,8 +789,7 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
         var[1]=1;
         var[2]=350;
         break;
-    case FF_PCSAFT1://Use MLSL_LDS plus Nealder-Mead
-        //printf("hola soy FF_PCSAFT1\n");
+    case FF_PCSAFT1://PCSAFT 1A assoc. schema Use MLSL_LDS plus Nealder-Mead
         nVar=5;
         lb[0]=2.0;
         ub[0]=4.1;
@@ -886,7 +808,6 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
         var[4]=2300;
         break;
     case FF_PCSAFT2B://Use MLSL_LDS plus Nealder-Mead
-        //printf("hola soy FF_PCSAFT2B\n");
         nVar=5;
         lb[0]=2.0;
         ub[0]=4.1;
@@ -905,7 +826,6 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
         var[4]=2300;
         break;
     case FF_PCSAFT4C://Use MLSL_LDS plus Nealder-Mead
-        //printf("hola soy FF_PCSAFT4C\n");
         nVar=5;
         lb[0]=2.0;
         ub[0]=4.1;
@@ -938,7 +858,6 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
     case FF_PCSAFT1:
     case FF_PCSAFT2B:
     case FF_PCSAFT4C:
-        //printf("nVar:%u\n",nVar);
         alg=NLOPT_GN_MLSL_LDS;
         algL=NLOPT_LN_NELDERMEAD;
         opt=nlopt_create(alg,nVar);
@@ -951,12 +870,9 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
         nlopt_set_maxeval(opt,1e8);//number of evaluations
         nlopt_set_maxtime(opt,optTime);//Max.time in seconds
         nlopt_set_min_objective(opt, FF_SaftPvRhoError, data);
-        //nlopt_add_inequality_constraint(opt,SaftEOSCriticalConstraint,data,1e-4);//
-        //nlopt_add_inequality_constraint(opt,SaftEOSDensityConstraint,data,1e-4);//
         break;
     default://cubic EOS
         alg=NLOPT_GN_MLSL_LDS;
-        //alg=NLOPT_AUGLAG;
         if (data->eos==FF_PR76 || data->eos==FF_PR78)algL=NLOPT_LN_SBPLX;
         else algL=NLOPT_LN_NELDERMEAD;
         opt=nlopt_create(alg,nVar);
@@ -966,49 +882,48 @@ void CALLCONV FF_OptEOSparam(unsigned optTime,unsigned nVar,double lb[],double u
         nlopt_set_local_optimizer(opt, optL);
         nlopt_set_lower_bounds(opt, lb);
         nlopt_set_upper_bounds(opt, ub);
-        nlopt_set_maxeval(opt,1e6);//number of evaluations
+        nlopt_set_maxeval(opt,1e6);//max. number of evaluations
         nlopt_set_maxtime(opt,optTime);//Max.time in seconds
         nlopt_set_min_objective(opt, FF_CubicPvRhoError, data);
         //nlopt_add_inequality_constraint(opt,FF_CubicEOSAlphaConstraint,data,1e-2);//this makes that the calculated alpha is not too different from PR or FF_SRK original alpha
         break;
     }
     int code=nlopt_optimize(opt, var, error);
-    //int code=1;
     printf("Return code:%i\n",code);
     if (code < 0){
         printf("nlopt failed!\n");
     }
     else{
-        //printf("found minimum after %d evaluations\n", count);
+        switch(data->eos){
+        case FF_PCSAFT1:
+        case FF_PCSAFT2B:
+        case FF_PCSAFT4C:
+            printf("found minimum at f(%g,%g,%g,%g,%g) = %0.10g\n", var[0], var[1], var[2],var[3],var[4],*error);
+            break;
+        case FF_PRFIT4:
+            printf("found minimum at f(%g,%g,%g,%g) = %0.10g\n", var[0], var[1], var[2],var[3],*error);
+            break;
+        case FF_PR76:
+        case FF_PR78:
+        case FF_PRALMEIDA:
+        case FF_PRMC:
+        case FF_PRTWU91:
+        case FF_PRFIT3:
+        case FF_SRKMC:
+        case FF_SRKTWU91:
+            printf("found minimum at f(%g,%g,%g) = %0.10g\n", var[0], var[1], var[2],*error);
+            break;
+        case FF_PRMELHEM:
+        case FF_PRSOF:
+        case FF_SRKSOF:
+            printf("found minimum at f(%g,%g) = %0.10g\n", var[0], var[1],*error);
+            break;
+        default:
+           printf("found minimum at f(%g) = %0.10g\n", var[0],*error);
+            break;
+        }
     }
-    switch(data->eos){
-    case FF_PCSAFT1:
-    case FF_PCSAFT2B:
-    case FF_PCSAFT4C:
-        printf("found minimum at f(%g,%g,%g,%g,%g) = %0.10g\n", var[0], var[1], var[2],var[3],var[4],*error);
-        break;
-    case FF_PRFIT4:
-        printf("found minimum at f(%g,%g,%g,%g) = %0.10g\n", var[0], var[1], var[2],var[3],*error);
-        break;
-    case FF_PR76:
-    case FF_PR78:
-    case FF_PRALMEIDA:
-    case FF_PRMC:
-    case FF_PRTWU91:
-    case FF_PRFIT3:
-    case FF_SRK:
-    case FF_SRKTWU91:
-        printf("found minimum at f(%g,%g,%g) = %0.10g\n", var[0], var[1], var[2],*error);
-        break;
-    case FF_PRMELHEM:
-    case FF_PRSOF:
-    case FF_SRKSOF:
-        printf("found minimum at f(%g,%g) = %0.10g\n", var[0], var[1],*error);
-        break;
-    default:
-       printf("found minimum at f(%g) = %0.10g\n", var[0],*error);
-        break;
-    }
+
     //nlopt_destroy(opt);
 }
 
