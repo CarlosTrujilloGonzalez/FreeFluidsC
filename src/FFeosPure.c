@@ -54,7 +54,6 @@ const double FF_PCSAFTbp[7][3]={{0.724094694, -0.575549808, 0.097688312},{2.2382
 //Calculates a,b,u,w for a cubic EOS. Using critical constants
 //------------------------------------------------------------
 void CALLCONV FF_FixedParamCubic(const  FF_CubicEOSdata *data, FF_CubicParam *param){
-    //printf("Hola, busco param fijos. eos:%i Tc:%f c:%f\n",data->eos,data->Tc,data->c);
     switch (data->eos)
     {
     case FF_PR76:
@@ -131,7 +130,6 @@ void CALLCONV FF_FixedParamCubic(const  FF_CubicEOSdata *data, FF_CubicParam *pa
         break;
 
     }
-    //printf("Hola, soy fixed param cubic eos b:%f b clasical:%f a:%f c:%f\n",param->b,0.077796*R*data->Tc/data->Pc,param->a,param->c);
 }
 
 //Calculates Theta and its derivatives, given a cubic EOS and T. Using critical and others constants
@@ -157,14 +155,12 @@ EXP_IMP void CALLCONV FF_ThetaDerivCubic(const double *T,const  FF_CubicEOSdata 
         else fw = 0.379642 + 1.487503 * data->w - 0.164423 * pow(data->w,2)+ 0.016666 * pow(data->w,3);
         Alpha = pow((1 + fw * Tx),2);
         dAlpha=2*(1 + fw * Tx)*fw*dTx;
-        //d2Alpha=2*fw*(fw*pow(dTx,2)+fw*Tx*d2Tx);
         d2Alpha=2*fw*(d2Tx+fw*pow(dTx,2)+fw*Tx*d2Tx);
         break;
     case FF_PRSV1://Peng-Robinson Stryjek-Vera with 1 extra parameter.
     case FF_PRFIT4B://Peng Robinson Stryjeck- Vera with Tc,Pc,w,k1 fitted
         fw = 0.378893 + 1.4897153 * data->w - 0.17131848 * pow(data->w,2) + 0.0196554 * pow(data->w,3);
         if (*T < data->Tc){
-            //alfa = pow((1 + fw * (1 - pow(Tr,0.5))+ k1 * (1 - Tr) * (0.7 - Tr)),2);
             Alpha = pow((1 + fw * Tx+ data->k1 * (1 - Tr) * (0.7 - Tr)),2);
             dAlpha=2*pow(Alpha,0.5)*(fw*dTx+data->k1*(2*Tr-1.7)/data->Tc);
             d2Alpha=0.5*dAlpha*dAlpha/Alpha+2*pow(Alpha,0.5)*(fw*d2Tx+data->k1*2/pow(data->Tc,2));
@@ -192,9 +188,7 @@ EXP_IMP void CALLCONV FF_ThetaDerivCubic(const double *T,const  FF_CubicEOSdata 
         break;
     case FF_PRMELHEM://Peng-robinson Melhem with 2 extra parameters.
         Alpha =exp(data->k1*(1-Tr)+data->k2*pow(Tx,2));
-        //dAlpha=-Alpha/data->Tc*(data->k1+data->k2*pow(Tr,-0.5)-data->k2);
         dAlpha=Alpha*(-data->k1/data->Tc+2*data->k2*Tx*dTx);
-        //d2Alpha=dAlpha/Alpha-Alpha/data->Tc*(-0.5*data->k2*pow(Tr,-1.5)/data->Tc);
         d2Alpha=dAlpha*(-data->k1/data->Tc+2*data->k2*Tx*dTx)+Alpha*2*data->k2*(dTx*dTx+Tx*d2Tx);
         break;
     case FF_PRSOF://Stamateria-Olivera-Fuentes
@@ -265,7 +259,6 @@ EXP_IMP void CALLCONV FF_ThetaDerivCubic(const double *T,const  FF_CubicEOSdata 
         Tx = 1-pow(Tr,0.5);//As it is a common calculation, it is better to do it once
         dTx=-0.5*pow(Tr,-0.5)/data->k2;//This is the 1sr derivative redarding T
         d2Tx=0.25*pow(Tr,-1.5)/data->k2/data->k2;//and this the 2ndAlpha = pow((1 + data->k2 * (1-pow(*T/data->k3,0.5)),2);
-        //alfa = pow((1 + fw * (1 - pow(Tr,0.5))+ k1 * (1 - Tr) * (0.7 - Tr)),2);
         Alpha = pow((1 + fw * Tx+ data->k3 * (1 - Tr) * (0.7 - Tr)),2);
         dAlpha=2*pow(Alpha,0.5)*(fw*dTx+data->k3*(2*Tr-1.7)/data->k2);
         d2Alpha=0.5*dAlpha*dAlpha/Alpha+2*pow(Alpha,0.5)*(fw*d2Tx+data->k3*2/pow(data->k2,2));
@@ -301,7 +294,6 @@ EXP_IMP void CALLCONV FF_ThetaDerivCubic(const double *T,const  FF_CubicEOSdata 
     param->Theta=param->a*Alpha;
     param->dTheta=param->a*dAlpha;
     param->d2Theta=param->a*d2Alpha;
-    //printf("Theta:%f dTheta:%f d2Theta:%f a:%f, b:%f\n",param->Theta,param->dTheta,param->d2Theta,param->a,param->b);
 }
 
 //Arr(reduced residual Helmholtz free energy)and Z calculation for a pure substance, given T and V, according to cubic EOS
@@ -345,7 +337,6 @@ void CALLCONV FF_VfromTPcubic(const double *T,const double *P,const  FF_CubicPar
     N = M*M / 4 + L*L*L / 27;//R
     //printf("P:%f Q:%f R:%f\n",L,M,N);
     if (N > 0){
-        //printf("Hola Z0\n");
         Nsqr=pow(N,0.5);
         Root[0] = (-M / 2 + Nsqr)/fabs((-M / 2 + Nsqr))*pow(fabs((-M / 2 + Nsqr)),0.333333) + (-M / 2 - Nsqr)/fabs(-M / 2 - Nsqr)*pow((fabs(-M / 2 - Nsqr)),0.333333);//complexity is due to grant a positive base
         Z[0] = Root[0] - a2 / 3;
@@ -485,7 +476,6 @@ void CALLCONV FF_ArrDerCubic(const double *T,const double *V,const  FF_CubicPara
     result[3]=log((Veos+ub)/(Veos+wb))*(*T * param->dTheta-param->Theta)/(R*param->b*(param->w-param->u)*T2);//dArr/dT
     result[4]=log((Veos+ub)/(Veos+wb))* (param->d2Theta*T2-2*(*T * param->dTheta-param->Theta))/(R*param->b*(param->w-param->u)*T2* *T);//d2Arr/dT2
     result[5]=(*T * param->dTheta-param->Theta)/(R*T2*(Veos+ub)*(Veos+wb));//d2Arr/dVdT
-    //printf("Arr:%f  dArr/dV:%f  dArr/dT:%f\n",result[0],result[1],result[3]);
 }
 
 
@@ -509,108 +499,6 @@ void CALLCONV FF_calcI1I2(double m,double eta,double I[4])
     }
 }
 
-
-/*
-//Z and Arr calculation for a pure substance, given T and V, according to FF_PCSAFT EOS
-//-----------------------------------------------------------------------------------
-void CALLCONV FF_ArrZfromTVPCSAFT(const double *T,const double *V,const  FF_SaftEOSdata *data,double *Arr,double *Z)
-{
-    //static int counter=0;
-    //counter++;
-    double Vmolecular,rho,d,eta,Zhs,Ahs,ghs,dLghs_drho,Zchain,Achain;
-    double epsilon=data->epsilon+pow(data->mu,4)* *T/9000;
-    Vmolecular = *V / Av * 1E+30;//molecular volume in A3
-    rho = 1 / Vmolecular;//molecules/A3
-    d = data->sigma * (1 - 0.12 * exp(-3 * epsilon / *T)); //Hard sphere diameter in A, at given T
-    eta = data->m * (Pi * pow(d,3) / 6) / Vmolecular; //Volume fraction filled with hard sphere. The terms in Angstrom cancel, so not necessary to pass to SI
-
-    //Contribution by hard spheres chain.
-    Zhs = data->m * (4 * eta - 2 * pow(eta,2)) / pow((1 - eta),3);
-    Ahs = data->m*(4 * eta - 3 * pow(eta,2)) / pow((1 - eta),2);
-    ghs = (2 - eta) / 2 / pow((1 - eta),3);
-    dLghs_drho = (5 * eta / 2 - pow(eta,2)) / (1 - eta) / (1 - 0.5 * eta) * Vmolecular;
-    Zchain = (1 - data->m) * dLghs_drho / Vmolecular;
-    Achain = (1 - data->m) * log(ghs);
-
-    //contribution by dispersion (attraction between non associated molecules)
-    double Z1,C1,C2,Z2,Zdisp,Adisp,I[4]={0.0,0.0,0.0,0.0};;
-    FF_calcI1I2(data->m,eta,I);
-    Z1 = -2 * Pi / Vmolecular * I[1] * pow(data->m,2) * epsilon / *T * pow(data->sigma,3);
-    C1 = 1/(1 + data->m * (8 * eta - 2 * pow(eta,2)) / pow((1 - eta),4) + (1 - data->m) * (20 * eta - 27 * pow(eta,2)
-            + 12 * pow(eta,3) - 2 * pow(eta,4)) / pow(((1 - eta) * (2 - eta)),2));
-    C2 = C1 * (data->m * (-4 * pow(eta,2) + 20 * eta + 8) / pow((1 - eta),5) + (1 - data->m) * (2 * pow(eta,3)
-            + 12 * pow(eta,2) - 48 * eta + 40) / pow(((1 - eta) * (2 - eta)),3));
-    Z2 = -Pi / Vmolecular * data->m * C1 * (I[3] - C2 * eta * I[2])* pow(data->m,2) * pow((epsilon / *T),2) * pow(data->sigma,3);
-    Zdisp = Z1 + Z2;
-    Adisp = -2 * Pi / Vmolecular * I[0] * pow(data->m,2) * epsilon * pow(data->sigma,3) / *T - Pi / Vmolecular * data->m * C1
-            * I[2] * pow(data->m,2) * pow((epsilon / *T),2) * pow(data->sigma,3);
-
-    //Contribution by molecular association
-    double DeltaAB,X[data->nPos+data->nNeg+data->nAcid],Zassoc,Aassoc; //X=[] is fraction of molecules not associated at site i
-    double sum;
-    if ((data->kAB > 0) && (data->epsilonAB > 0)) //If the molecule has association parameters
-    {   //DeltaAB = pow(d,3) * ghs * data->kAB * (exp(data->epsilonAB / *T) - 1);
-        DeltaAB = pow(data->sigma,3) * ghs * data->kAB * (exp(data->epsilonAB / *T) - 1);
-        //Calculation taking account of number of association sites of the molecule(1=acids,2=alcohol,4=water or diols)
-        if (data->nAcid==1){//1A
-            X[0]=(-1 + pow((1 + 4 * rho * DeltaAB),0.5)) / (2 * rho * DeltaAB);
-            //printf("Delta:%f\n",DeltaAB);
-        }
-        else if (data->nPos==1 && data->nNeg==1){//2B
-            X[0]=X[1]=(-1 + pow((1 + 4 * rho * DeltaAB),0.5)) / (2 * rho * DeltaAB);
-        }
-        else if (data->nPos==2 && data->nNeg==2)//4C
-        {
-            X[0]=X[1]=X[2]=X[3]=(-1 + pow((1 + 8 * rho * DeltaAB),0.5)) / (4 * rho * DeltaAB);
-        }
-        else if ((data->nPos==2 && data->nNeg==1)||(data->nPos==1 && data->nNeg==2)){//3B
-            X[0]=X[1]=(-(1 - rho * DeltaAB) + pow((pow((1 + rho * DeltaAB),2) + 4 * rho * DeltaAB),0.5)) / (4 * rho * DeltaAB);
-            X[2]=(2 * X[0] - 1);
-        }
-        else if (data->nAcid==2){//2A
-            X[0]=X[1]=(-1 + pow((1 + 8 * rho * DeltaAB),0.5)) / (4 * rho * DeltaAB);
-            //printf("Delta:%f\n",DeltaAB);
-        }
-        else if ((data->nPos==3 && data->nNeg==1)||(data->nPos==1 && data->nNeg==3)){//4B
-            X[0]=X[1]=X[2]=(-(1 - 2*rho * DeltaAB) + pow((pow((1 + 2*rho * DeltaAB),2) + 4 * rho * DeltaAB),0.5)) / (6 * rho * DeltaAB);
-            X[3]=(3 * X[0] - 2);
-        }
-        else if (data->nAcid==3){//3A
-            X[0]=X[1]=X[2]=(-1 + pow((1 + 12 * rho * DeltaAB),0.5)) / (6 * rho * DeltaAB);
-            //printf("Delta:%f\n",DeltaAB);
-        }
-        else if (data->nAcid==4){//4A
-            X[0]=X[1]=X[3]=X[4]=(-1 + pow((1 + 16 * rho * DeltaAB),0.5)) / (8 * rho * DeltaAB);
-            //printf("Delta:%f\n",DeltaAB);
-        }
-        else{
-            int i;
-            for (i==0;i<data->nPos+data->nNeg+data->nAcid;i++) X[i]=1;
-        }
-        sum=0;
-        int i;
-        for (i=0;i<(data->nPos+data->nNeg+data->nAcid);i++){
-            //printf("i:%i Xi:%f\n",i,X[i]);
-            sum = sum + 1 -X[i];
-        }
-        //printf("sum:%f dLghs_drho:%f\n",sum,dLghs_drho);
-        Zassoc=-0.5*(1+rho*dLghs_drho)*sum;
-        Aassoc = (data->nPos+data->nNeg+data->nAcid)/ 2;
-        for (i=0; i<(data->nPos+data->nNeg+data->nAcid);i++)
-            Aassoc = Aassoc + (log(X[i]) - X[i] / 2);
-        //printf("Aassoc:%f Zassoc:%f\n",Aassoc,Zassoc);
-    }
-    else
-    {
-        Zassoc=0.0;
-        Aassoc=0.0;
-    }
-
-    *Arr= Ahs + Achain + Adisp + Aassoc;//Reduced residual Helmholz free energy
-    *Z = 1 + Zhs + Zchain + Zdisp + Zassoc;//Z
-}
-
-*/
 
 //Z and Arr calculation for a pure substance, given T and V, according to FF_PCSAFT EOS
 //-----------------------------------------------------------------------------------
@@ -1602,9 +1490,54 @@ void CALLCONV FF_IdealThermoEOS(const int *equation,const double coef[],double *
                 }
             }
             break;
-        case 5://Wilhoit equation J/mol·K (8 coefficients)
-             {double y=(th0->T-coef[7])/(th0->T+coef[6]);
-             th0->Cp=R*(coef[0] + coef[1]/pow(th0->T,2)*exp(-coef[2]/th0->T) + coef[3]*pow(y,2) + (coef[4] - coef[5] /pow((th0->T -coef[7]),2))*pow(y,8));
+        case 5:{//Wilhoit equation J/mol·K (8 coefficients)
+            double y,y2,y4,h,a7_a6,a7_a6_2,a7_a6_4,x1,z,w,s;
+            a7_a6=coef[7]/coef[6];
+            a7_a6_2=a7_a6*a7_a6;
+            a7_a6_4=a7_a6_2*a7_a6_2;
+            x1=(coef[4]*coef[7]*coef[7] - coef[5])/(coef[6]*coef[6]);
+
+            if (th0->T<=coef[7]) y=0;
+            else y=(th0->T-coef[7])/(th0->T+coef[6]);
+            y2=y*y;
+            y4=y2*y2;
+            th0->Cp=R*(coef[0] + coef[1]/pow(th0->T,2)*exp(-coef[2]/th0->T) + coef[3]*y2 + (coef[4] - coef[5] /pow((th0->T -coef[7]),2))*y4*y4);
+
+            if (th0->T<=coef[7]) h=0;
+            else h=(coef[6]+coef[7])*((2*coef[3]+8*coef[4])*log(1-y)+ (coef[3]*(1+1/(1-y))+coef[4]*(7+1/(1-y)))*y+
+                    coef[4]*(3*y2+5*y*y2/3+y4+0.6*y4*y+y4*y2/3)+ (coef[4]-coef[5]/pow((coef[6]+coef[7]),2))*y4*y2*y/7);
+            th0->H= R*th0->T*(coef[0]+coef[1]*exp(-coef[2]/th0->T)/(coef[2]*th0->T))+R*h;
+
+            if (th0->T<=coef[7]) s=0;
+            else{
+                z = th0->T*(coef[7] + coef[6])/((th0->T + coef[6])*coef[7]);
+                w=0;
+                for (i=1;i<8;i++) w=w+(x1*pow(-a7_a6,6-i) - coef[4])*pow(y,i)/i;
+                s=(coef[3] + ((coef[4]*coef[7]*coef[7]-coef[5])*a7_a6_4/(coef[6]*coef[6])))*a7_a6_2*log(z)+
+                    (coef[3] + coef[4])*log((th0->T + coef[6])/(coef[6] + coef[7]))-
+                    (coef[3]*(coef[6] + coef[7])/coef[6] + coef[5]*y4*y2/(7.*coef[7]*(coef[6] + coef[7])))*y+w;
+            }
+            th0->S=R*(coef[0]*log(th0->T)+coef[1]*(1+coef[2]/th0->T)*exp(-coef[2]/th0->T)/(coef[2]*coef[2])+s);
+
+            if (*refT<coef[7]) y=0;
+            else y=(*refT-coef[7])/(*refT+coef[6]);
+            y2=y*y;
+            y4=y2*y2;
+            if (*refT<=coef[7]) h=0;
+            else h=(coef[6]+coef[7])*((2*coef[3]+8*coef[4])*log(1-y)+ (coef[3]*(1+1/(1-y))+coef[4]*(7+1/(1-y)))*y+
+                    coef[4]*(3*y2+5*y*y2/3+y4+0.6*y4*y+y4*y2/3)+ (coef[4]-coef[5]/pow((coef[6]+coef[7]),2))*y4*y2*y/7);
+            th0->H=th0->H-R* *refT*(coef[0]+coef[1]*exp(-coef[2]/ *refT)/(coef[2]*th0->T))-R*h;
+
+            if (*refT<=coef[7]) s=0;
+            else{
+                z = *refT*(coef[7] + coef[6])/((*refT + coef[6])*coef[7]);
+                w=0;
+                for (i=1;i<8;i++) w=w+(x1*pow(-a7_a6,6-i) - coef[4])*pow(y,i)/i;
+                s=(coef[3] + ((coef[4]*coef[7]*coef[7]-coef[5])*a7_a6_4/(coef[6]*coef[6])))*a7_a6_2*log(z)+
+                        (coef[3] + coef[4])*log((*refT + coef[6])/(coef[6] + coef[7]))-
+                        (coef[3]*(coef[6] + coef[7])/coef[6] + coef[5]*y4*y2/(7.*coef[7]*(coef[6] + coef[7])))*y+w;
+            }
+            th0->S=th0->S-R*(coef[0]*log(*refT)+coef[1]*(1+coef[2]/ *refT)*exp(-coef[2]/ *refT)/(coef[2]*coef[2])+s);
             }
             break;
         case 7://Cooper (11 coefficients used in IAPWS95 and CO2) plus potential term  (used in short fundamental equations with 11 coefficients also,lacks last exp terms)
