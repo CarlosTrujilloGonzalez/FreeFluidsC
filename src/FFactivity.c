@@ -253,19 +253,272 @@ void CALLCONV FF_ActivityUNIQUAC(const int *numSubs,const  FF_BaseProp baseProp[
     }
 }
 
+//Calculates the common data, independent of the molar fraction and temperature for the UNIFAC model.
+//In data, we receive for each substance, its composition in number of each subgroup. So each register is: id substance, id subgroup, num of ocurrences
+//In uni we answer all the calculations
+void CALLCONV FF_UNIFACParams(int numData, const int data[][3], FF_UnifacData *uni){
+    int i,j,k,newSubs,newSubg;
+    //We need to count the different subgroups used, and to store their id
+    int numSubgroups=0;
+    //We need also to count the different substances, storing it original id
+    int numSubs=0;
+    int substance[20];//Will contain the original id of the substances
+    for (i=0;i<20;i++) for(j=0;j<30;j++) uni->subsSubg[i][j]=0;//We fill with 0 the conmposition of the substances in subgroups
+    //We fill the first register with the first data
+    uni->subgroup[0][0]=data[0][1];//this will contain the list of subgroups and their corresponding group
+    numSubgroups=1;
+    substance[0]=data[0][0];
+    numSubs=1;
+    uni->subsSubg[0][0]=data[0][2];//this will contain the ocurrence of subgroups in the substances
+
+    for (i=1; i<numData;i++){//We follow all the descriptors
+        newSubs=1;//We say that the substance is new
+        for (j=0;j<numSubs;j++){//We follow all the already defined substances
+            if (data[i][0]==substance[j]){
+                newSubs=0;//We say that the substance is not new
+                break;
+            }
+        }
+        if (newSubs){//If not found we add the substance
+            j=numSubs;//j must contain the index of the substance
+            substance[j]=data[i][0];
+            numSubs++;
+        }
+        newSubg=1;//we say the subgroup is new
+        for (k=0; k<numSubgroups;k++){//We follow the already defined subgroups
+            if (data[i][1]==uni->subgroup[k][0]){
+                newSubg=0;//we say that the subgroup is not new
+                break;
+            }
+        }
+        if (newSubg){//if not found we add the subgroups
+            k=numSubgroups;
+            uni->subgroup[k][0]=data[i][1];
+            numSubgroups++;
+        }
+        uni->subsSubg[j][k]=data[i][2];
+    }
+    //we recover from the corresponding file the subgroups information, and fill the subgroup and subgData table
+    FILE *f;
+    unsigned sg,g,g1,g2;
+    double r,q,A12,B12,C12,A21,B21,C21;
+    if (uni->model==FF_UNIFACStd) f=fopen("UnifacSubgStd.txt","r");
+    else if ((uni->model==FF_UNIFACPSRK)||(uni->model==FF_EntropicFV)||(uni->model==FF_UNIFACZM)) f=fopen("UnifacSubgPSRK.txt","r");
+    else if (uni->model==FF_UNIFACDort) f=fopen("UnifacSubgDort.txt","r");
+    else if (uni->model==FF_UNIFACNist) f=fopen("UnifacSubgNist.txt","r");
+    for (i=0;i<numSubgroups;i++){
+        do{
+            fscanf(f,"%3lu%3lu%6lf%6lf\n",&sg,&g,&r,&q);
+            if(uni->subgroup[i][0]==sg){
+                uni->subgroup[i][1]=g;
+                uni->subgData[i][0]=r;
+                uni->subgData[i][1]=q;
+                break;
+            }
+        } while (sg<300);
+        //printf("%i %i %i %f %f\n",i,uni->subgroup[i][0],uni->subgroup[i][1],uni->subgData[i][0],uni->subgData[i][1]);
+        rewind(f);
+    }
+    fclose(f);
+
+    //we recover now the subgroup interaction and fill the subgroupInter table
+    for (i=0;i<numSubgroups;i++){
+        for (j=0;j<numSubgroups;j++){
+            uni->subgInt[i][j][0]=0;
+            uni->subgInt[i][j][1]=0;
+            uni->subgInt[i][j][2]=0;
+        }
+    }
+    if (uni->model==FF_UNIFACStd) f=fopen("UnifacInterStd.txt","r");
+    else if ((uni->model==FF_UNIFACPSRK)||(uni->model==FF_EntropicFV)||(uni->model==FF_UNIFACZM)) f=fopen("UnifacInterPSRK.txt","r");
+    else if (uni->model==FF_UNIFACDort) f=fopen("UnifacInterDort.txt","r");
+    else if (uni->model==FF_UNIFACNist) f=fopen("UnifacInterNist.txt","r");
+    if (f==NULL) printf("Error\n");
+    if (uni->model==FF_UNIFACStd){
+        for (i=0;i<numSubgroups;i++){
+            for (j=0;j<numSubgroups;j++){
+                if (uni->subgroup[i][1]<uni->subgroup[j][1]){
+                    do{
+                        fscanf(f,"%03lu%03lu%10lf%10lf\n",&g1,&g2,&A12,&A21);
+                        //printf("%i %i %f %f\n",g1,g2,A12,A21);
+                        if ((g1==uni->subgroup[i][1])&& (g2==uni->subgroup[j][1])){
+                            uni->subgInt[i][j][0]=A12;
+                            uni->subgInt[j][i][0]=A21;
+                            //printf("%i %i %f %f\n",g1,g2,uni->subgInt[i][j][0],uni->subgInt[j][i][0]);
+                            break;
+                        }
+                    } while(g1<85);
+                    rewind(f);
+                }
+            }
+        }
+    }
+    else if ((uni->model==FF_UNIFACPSRK)||(uni->model==FF_UNIFACDort)||(uni->model==FF_UNIFACNist)||(uni->model==FF_UNIFACZM)||(uni->model==FF_EntropicFV)){
+        for (i=0;i<numSubgroups;i++){
+            for (j=0;j<numSubgroups;j++){
+                if (uni->subgroup[i][1]<uni->subgroup[j][1]){
+                    do{
+                        fscanf(f,"%03lu%03lu%10lf%10lf%10lf%10lf%10lf%10lf\n",&g1,&g2,&A12,&B12,&C12,&A21,&B21,&C21);
+                        //printf("%i %i %f %f\n",g1,g2,A12,A21);
+                        if ((g1==uni->subgroup[i][1])&& (g2==uni->subgroup[j][1])){
+                            uni->subgInt[i][j][0]=A12;
+                            uni->subgInt[i][j][1]=B12;
+                            uni->subgInt[i][j][2]=C12;
+                            uni->subgInt[j][i][0]=A21;
+                            uni->subgInt[j][i][1]=B21;
+                            uni->subgInt[j][i][2]=C21;
+                            //printf("%i %i %f %f %f %f %f %f\n",g1,g2,uni->subgInt[i][j][0],uni->subgInt[i][j][1],uni->subgInt[i][j][2],
+                                    //uni->subgInt[j][i][0],uni->subgInt[j][i][1],uni->subgInt[j][i][2]);
+                            break;
+                        }
+                    } while(g1<89);
+                    rewind(f);
+                }
+            }
+        }
+    }
+    fclose(f);
+
+    for (i=0; i<numSubs;i++){
+        uni->subsR[i]=0;
+        uni->subsQ[i]=0;
+        for (j=0;j<numSubgroups;j++){
+            uni->subsR[i]=uni->subsR[i]+uni->subsSubg[i][j]*uni->subgData[j][0];
+            uni->subsQ[i]=uni->subsQ[i]+uni->subsSubg[i][j]*uni->subgData[j][1];
+        }
+    }
+    uni->numSubs=numSubs;
+    uni->numSubg=numSubgroups;
+}
+
+//Calculates activity coefficients according to UNIFAC models, at given T and composition.
+void CALLCONV FF_ActivityUNIFAC(FF_UnifacData *data, const double *T, const double x[], double lnGammaC[], double lnGammaR[], double *gE){
+    int i,j,k;
+    //Combinatorial part calculation
+    double meanR=0, meanQ=0, meanL=0,theta[data->numSubs],phi[data->numSubs];
+    if (data->model==FF_EntropicFV){
+        for (i=0;i<data->numSubs;i++){
+            meanR=meanR+data->FV[i]*x[i];
+            meanQ=meanQ+data->subsQ[i]*x[i];
+        }
+        for (i=0;i<data->numSubs;i++){
+            phi[i]=data->FV[i]/meanR;//Free Volume ratio
+            theta[i]=data->subsQ[i]/meanQ;//Area fraction
+        }
+    }
+    else{
+        for (i=0;i<data->numSubs;i++){
+            meanR=meanR+data->subsR[i]*x[i];
+            meanQ=meanQ+data->subsQ[i]*x[i];
+        }
+        for (i=0;i<data->numSubs;i++){
+            phi[i]=data->subsR[i]/meanR;//Volume fraction/x[i]
+            theta[i]=data->subsQ[i]/meanQ;//Area fraction
+        }
+    }
+    if ((data->model==FF_UNIFACStd)||(data->model==FF_UNIFACPSRK)){
+            for (i=0;i<data->numSubs;i++){
+                lnGammaC[i]=log(phi[i])+1-phi[i]-5*data->subsQ[i]*(log(phi[i]/theta[i])+1-phi[i]/theta[i]);
+                //lnGammaC[i]=log(phi[i])+5*data->subsQ[i]*log(theta[i]/phi[i])+data->subsL[i]-phi[i]*meanL;//alternative from Fredenslund
+                //printf("lnGammaC[%i]:%f\n",i,lnGammaC[i]);
+            }
+    }
+    else if((data->model==FF_EntropicFV)){
+        for (i=0;i<data->numSubs;i++){
+            lnGammaC[i]=1-phi[i]+log(phi[i]);
+            //printf("lnGammaC[%i]:%f\n",i,lnGammaC[i]);
+        }
+    }
+    else if ((data->model==FF_UNIFACDort)||(data->model==FF_UNIFACNist)){
+        double meanR2=0, phi2[data->numSubs];
+        for (i=0;i<data->numSubs;i++) meanR2=meanR2+pow(data->subsR[i],0.75)*x[i];
+        for (i=0;i<data->numSubs;i++){
+            phi2[i]=pow(data->subsR[i],0.75)/meanR2;//Volume fraction /x[i]
+            lnGammaC[i]=(1-phi2[i]+log(phi2[i])-5*data->subsQ[i]*(1-phi[i]/theta[i]+log(phi[i]/theta[i])));
+            //printf("lnGammaC[%i]:%f\n",i,lnGammaC[i]);
+        }
+    }
+    else if (data->model==FF_UNIFACZM){
+        double meanR2=0, phi2[data->numSubs];
+        for (i=0;i<data->numSubs;i++){
+            if (data->subsR[i]>65) meanR2=meanR2+data->subsR[i]*0.6583*x[i];//we consider a polymer if R is over 65
+            else meanR2=meanR2+data->subsR[i]*x[i];
+        }
+        for (i=0;i<data->numSubs;i++){
+            if (data->subsR[i]>65) phi2[i]=data->subsR[i]*0.6583/meanR2;//Volume fraction /x[i]
+            else phi2[i]=data->subsR[i]/meanR2;
+            lnGammaC[i]=(1-phi2[i]+log(phi2[i])-5*data->subsQ[i]*(1-phi[i]/theta[i]+log(phi[i]/theta[i])));
+            //printf("lnGammaC[%i]:%f\n",i,lnGammaC[i]);
+        }
+    }
+    //Residual part calculation
+    //first we calculate the interaction between subgroups, as a temperature function
+    double psi[data->numSubg][data->numSubg], substSubgrTheta[data->numSubs][data->numSubg],substSubgrLambda[data->numSubs][data->numSubg],
+            substSubgrSum[data->numSubs][data->numSubg];
+    if (data->model==FF_UNIFACStd){
+        for (i=0;i<data->numSubg;i++) for (j=0;j<data->numSubg;j++) psi[i][j]=exp(-data->subgInt[i][j][0]/ *T);
+    }
+    else if ((data->model==FF_UNIFACPSRK)||(data->model==FF_UNIFACDort)||(data->model==FF_UNIFACNist)||(data->model==FF_EntropicFV)||(data->model==FF_UNIFACZM)){
+        for (i=0;i<data->numSubg;i++) for (j=0;j<data->numSubg;j++) psi[i][j]=exp(-data->subgInt[i][j][0]/ *T -
+               data->subgInt[i][j][1] - data->subgInt[i][j][2]* *T);
+    }
+    //now the calculation of theta and lambda por each subgroup in each substance
+    for (i=0;i<data->numSubs;i++){
+        for (j=0;j<data->numSubg;j++) substSubgrTheta[i][j]=data->subsSubg[i][j]*data->subgData[j][1]/data->subsQ[i];
+    }
+    for (i=0;i<data->numSubs;i++) for (j=0;j<data->numSubg;j++){
+        substSubgrSum[i][j]=0;
+        for (k=0;k<data->numSubg;k++) substSubgrSum[i][j]=substSubgrSum[i][j]+substSubgrTheta[i][k]*psi[k][j];
+    }
+    for (i=0;i<data->numSubs;i++) for (j=0;j<data->numSubg;j++){
+        substSubgrLambda[i][j]=0;
+        if (data->subsSubg[i][j]>0){
+            for (k=0;k<data->numSubg;k++) substSubgrLambda[i][j]=substSubgrLambda[i][j]+substSubgrTheta[i][k]*psi[k][j];
+            substSubgrLambda[i][j]=1-log(substSubgrLambda[i][j]);
+            for (k=0;k<data->numSubg;k++) substSubgrLambda[i][j]=substSubgrLambda[i][j]-substSubgrTheta[i][k]*psi[j][k]/substSubgrSum[i][k];
+             substSubgrLambda[i][j]=data->subgData[j][1]* substSubgrLambda[i][j];
+        }
+    }
+    //Now we calculate theta and lambda of the subgroups in the whole mixture
+    double subgrTheta[data->numSubg],subgrSum[data->numSubg],subgrLambda[data->numSubg];
+    for (j=0;j<data->numSubg;j++){
+        subgrTheta[j]=0;
+        for (i=0;i<data->numSubs;i++) subgrTheta[j]=subgrTheta[j]+data->subgData[j][1]*x[i]*data->subsSubg[i][j]/meanQ;
+    }
+    for (j=0;j<data->numSubg;j++){
+        subgrSum[j]=0;
+        for (k=0;k<data->numSubg;k++) subgrSum[j]=subgrSum[j]+subgrTheta[k]*psi[k][j];
+    }
+    for (j=0;j<data->numSubg;j++){
+        subgrLambda[j]=0;
+        for (k=0;k<data->numSubg;k++) subgrLambda[j]=subgrLambda[j]+ subgrTheta[k]*psi[k][j];
+        subgrLambda[j]=1-log(subgrLambda[j]);
+        for (k=0;k<data->numSubg;k++) subgrLambda[j]=subgrLambda[j]-subgrTheta[k]*psi[j][k]/subgrSum[k];
+        subgrLambda[j]=data->subgData[j][1]*subgrLambda[j];
+    }
+    *gE=0;
+    for (i=0;i<data->numSubs;i++){
+        lnGammaR[i]=0;
+        for (j=0;j<data->numSubg;j++) lnGammaR[i]=lnGammaR[i]+data->subsSubg[i][j]*(subgrLambda[j]-substSubgrLambda[i][j]);
+        //printf("lnGammaR[%i]:%f\n",i,lnGammaR[i]);
+        *gE=*gE+x[i]*(lnGammaC[i]+lnGammaR[i]);
+    }
+}
+
+
 //Calculates fugacity and activity coefficients, at given T and composition, from an activity model
 void CALLCONV FF_PhiFromActivity(const int *numSubs,enum FF_ActModel *model,const  FF_BaseProp baseProp[],const double pintParam[],
                                  const enum FF_IntParamForm *form,const bool *useVp,const enum FF_EosType *eosType,const void *data,
                                  const double *T,const double *P,const double x[],double gamma[],double phi[],double *gE){
     //First the calculation of the activity coefficient
     switch(*model){
-    case Wilson:
+    case FF_Wilson:
         FF_ActivityWilson(numSubs,baseProp,pintParam,form,T,x,gamma,gE);
         break;
-    case NRTL:
+    case FF_NRTL:
         FF_ActivityNRTL(numSubs,pintParam,form,T,x,gamma,gE);
         break;
-    case UNIQUAC:
+    case FF_UNIQUAC:
         FF_ActivityUNIQUAC(numSubs,baseProp,pintParam,form,T,x,gamma,gE);
         break;
     }

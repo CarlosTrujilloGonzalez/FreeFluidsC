@@ -80,6 +80,9 @@ EXP_IMP void CALLCONV FF_LiqDensSatRackett(const  FF_BaseProp *baseProp,const do
 void CALLCONV FF_LiqDensChuehPrausnitz(const  FF_BaseProp *baseProp, const int *nPoints,const double T[],const double P[],
                                        const double Vp[],double rhoin[], double rho[]);
 
+//Tait equation for polymer density, with T and P dependence
+void CALLCONV FF_LiqDensTait(const int *eq,const double coef[],const  FF_BaseProp *baseProp, const int *nPoints,const double T[],const double P[], double rho[]);
+
 #ifdef __cplusplus
 }
 #endif

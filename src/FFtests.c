@@ -25,6 +25,7 @@
 #include "FFeosPure.h"
 #include "FFeosMix.h"
 #include "FFtools.h"
+#include "FFactivity.h"
 
 //Some test with a single substance
 void TestEosPure(){
@@ -106,8 +107,8 @@ void TestEosPure(){
     //**********************************************
 
     //First do some direct cubic eos calculations
-    printf("Cubic EOS calculations\n");
-    printf("----------------------\n");
+    printf("Cubic EOS calculations for the uncommented substance\n");
+    printf("----------------------------------------------------\n");
     thR.MW=data1C.MW;
     thR.T=372.15;
     thR.P=101325;
@@ -118,7 +119,7 @@ void TestEosPure(){
     //Now we will obtain the volume from T and P and, with it, we will obtain some other properties using direct call to cubic eos functions
     option='b';//we want the liquid and the gas answer, if possible
     FF_VfromTPcubic(&thR.T,&thR.P,&paramC,&option,answerL,answerG,&state);//We find the V,Arr and Z
-    printf("Direct cubic EOS calc of V from T,P. Vgas:%f, Arr:%f, Z:%f\n\n",answerG[0],answerG[1],answerG[2]);
+    printf("Direct cubic EOS calc of V from T,P. T:%f, P:%f, Gas vol.:%f, Gas Arr:%f, Gas Z:%f\n\n",thR.T,thR.P,answerG[0],answerG[1],answerG[2]);
 
     //Now we will do the same but with call to generic functions, that will call the specific one
     eosType=FF_CubicType;//we need to indicate the type of eos in order to interpret the void pointer passed
@@ -129,13 +130,13 @@ void TestEosPure(){
     printf("Generic EOS calc of V from T,P determining the stable phase. V:%f, state:%c\n",thR.V,state);//'L' will indicate liquid, 'G' gas
 
     FF_ArrZfromTVeos(&eosType,&thR.T,&thR.V,&data1C,&Arr,&Z);
-    printf("State:%c, T:%f V:%f Arr:%f Z:%f\n\n",state,thR.T,thR.V,Arr,Z);
+    printf("Arr and Z calculation from the obtained volume, T:%f V:%f Arr:%f Z:%f\n\n",thR.T,thR.V,Arr,Z);
 
     //Some residual, ideal, and consolidated, properties obtained from T and V
     FF_ExtResidualThermoEOS(&eosType,&data1C,&thR);
     printf("Residual properties from T,V. T:%f, V:%f, P:%f H:%f\n\n",thR.T,thR.V,thR.P,thR.H);
     FF_IdealThermoEOS(&cp.form,cp.coef,&refT,&refP,&thR);
-    printf("Ideal properties. P:%f H:%f\n\n",thR.P,thR.H);
+    printf("Ideal properties from T,V. P:%f H:%f\n\n",thR.P,thR.H);
     FF_ThermoEOS(&eosType,&data1C,&cp.form,cp.coef,&refT,&refP,&thR);
     printf("Some consolidated properties from T,V. T:%f, V:%f, P:%f, H:%f, S:%f, SS:%f\n\n",thR.T,thR.V,thR.P,thR.H,thR.S,thR.SS);
 
@@ -290,7 +291,7 @@ void TestEosMix()
 
 
 //Allows to test the correlation parameters optimization using water data as input. Takes 20 seconds
-void CorrelationOptimization()
+void TestCorrelationOptimization()
 {
     unsigned nVar=5;
     FF_CorrelationData corrData;
@@ -326,7 +327,7 @@ void CorrelationOptimization()
 
 
 //Allows to test the EOS parameters optimization using water data as input
-void EOSoptimization()
+void TestEOSoptimization()
 {
     //enum OptModel optModel=cubicParam;
     enum FF_OptModel optModel=SAFTParam;
@@ -390,6 +391,66 @@ void EOSoptimization()
     printf("-------------------------------------------------------------------------------\n");
     FF_OptEOSparam(optTime,nVar,lb,ub,enforceLimits,&EOSData,var,&error);
     printf("Errors total:%f%%, Vp:%f%%, Liq.dens.:%f%%\n",error*100,EOSData.vpError*100,EOSData.ldensError*100);
+}
+
+//Allows to test Unifac calculation using Unifac standard and Unifac Dortmund. The model can be
+TestUnifac(){
+    int i;
+    FF_UnifacData *uni =(FF_UnifacData*) calloc(1,sizeof(FF_UnifacData));
+    uni->model=FF_UNIFACStd;
+    int numData=9;
+    int data1[9][3]={{0,1,2},{0,2,4},{1,1,1},{1,2,1},{1,14,1},{2,1,1},{2,2,4},{2,3,1},{3,9,6}};//hexane,ethanol,methylcyclopentane,benzene Unifac Std subgroups
+    FF_UNIFACParams(numData, data1, uni);
+    double T=334.85;//Temperature
+    double x1[4]={0.162,0.068,0.656,0.114};//composition
+    double lnGammaC[uni->numSubs],lnGammaR[uni->numSubs],gE;
+    FF_ActivityUNIFAC(uni,&T,x1,lnGammaC,lnGammaR,&gE);
+    printf("\nSystem hexane/ethanol/metylcylopentane/benzene(0.162,0.068,0.656,0.114) at 334.85 K using UNIFAC standard:\n");
+       printf("------------------------------------------------------------------------------\n");
+    for (i=0;i<uni->numSubs;i++) printf("Substance:%i Activity:%f\n",i, exp(lnGammaC[i]+lnGammaR[i]));
+    printf("\n");
+
+    uni->model=FF_UNIFACDort;
+    numData=4;
+    int data2[4][3]={{0,1,1},{0,18,1},{1,1,2},{1,2,4}};//acetone-hexane at 0.1/0.9 and 313ºK should give activity=3.6/1.0
+    FF_UNIFACParams(numData, data2, uni);
+    T=313;
+    double x2[2]={0.1,0.9};
+    FF_ActivityUNIFAC(uni,&T,x2,lnGammaC,lnGammaR,&gE);
+    printf("\nSystem acetone/hexane(0.1,0.9) at 313 K using UNIFAC Dortmund:\n");
+    printf("----------------------------------------------------------------\n");
+    for (i=0;i<uni->numSubs;i++) printf("Substance:%i Activity:%f\n",i, exp(lnGammaC[i]+lnGammaR[i]));
+    printf("\n");
+
+    //Activity tests in polymers
+    uni->model=FF_UNIFACZM;
+    numData=4;
+    //numData=6;
+    int data3[4][3]={{0,9,6},{1,2,1*557},{1,3,1*557},{1,21,1*557}};//benzene-PVAc MW=48000 (557 monomer units)
+    //int data3[6][3]={{0,14,1},{0,2,2},{0,1,1},{1,2,1*1974},{1,3,1*1974},{1,21,1*1974}};//propanol-PVAc MW=170000 (1974 monomer units)
+    FF_UNIFACParams(numData, data3, uni);
+    T=303.15;
+    double MW[2]={78.114,86.1*557}, q[2]={0.24,1-0.24},massFract[2];//mass fractionn of benzene and PVAc
+    //double MW[2]={60.096,86.1*1974}, q[2]={0.018,1-0.018},massFract[2];//mass fraction propanol and PVAc
+    FF_FractionsCalculation(2, MW, q, 1, massFract, x2);
+    FF_ActivityUNIFAC(uni,&T,x2,lnGammaC,lnGammaR,&gE);
+    printf("\nSystem benzene/PVAc(0.24,0.76)in mass at 303 K using UNIFACZM Experimental=0.72\n");
+    printf("-------------------------------------------------------------------------------\n");
+    for (i=0;i<uni->numSubs;i++) printf("Substance:%i Activity:%f\n",i, exp(lnGammaC[i]+lnGammaR[i]));
+    printf("\n");
+    uni->FV[0]=MW[0]/(867.9*1000)-4.84e-5*1.2;//real molar volume less Van der Waals volume multiply by 1.2
+    uni->FV[1]=MW[1]/(1185.6*1000)-4.79e-5*557*1.2;
+    //uni->FV[0]=MW[0]/(804.6*1000)-4.217e-5*1.2;//real molar volume less Van der Waals volume multiply by 1.2
+    //uni->FV[1]=MW[1]/(1185.6*1000)-4.79e-5*1974*1.2;
+    uni->model=FF_EntropicFV;
+    FF_ActivityUNIFAC(uni,&T,x2,lnGammaC,lnGammaR,&gE);
+    printf("\nSystem benzene/PVAc(0.24,0.76)in mass at 303 K using EntropicFV 1.2\n");
+    printf("-------------------------------------------------------------------\n");
+    for (i=0;i<uni->numSubs;i++) printf("Substance:%i Activity:%f\n",i, exp(lnGammaC[i]+lnGammaR[i]));
+    printf("\n");
+
+    if (uni==NULL) return;
+    free(uni);
 }
 
 //Load data for the system acetone-water
@@ -573,7 +634,7 @@ void FF_ActivityTest(){
     double phi[numSubs];
     int i,j,k;
     enum FF_IntParamForm form;
-    enum FF_ActModel model=NRTL;
+    enum FF_ActModel model=FF_NRTL;
     bool useVp;
     enum FF_EOS eos[numSubs];
     eos[0]=FF_PR78;

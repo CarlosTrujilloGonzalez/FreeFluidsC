@@ -47,6 +47,13 @@ EXP_IMP void CALLCONV FF_ActivityNRTL(const int *numSubs,const double pintParam[
 void CALLCONV FF_ActivityUNIQUAC(const int *numSubs,const  FF_BaseProp baseProp[],const double pintParam[],
                                  const enum FF_IntParamForm *form,const double *T,const double x[],double gamma[],double *gE);
 
+
+//Calculates the common data, independent of the molar fraction and temperature for the UNIFAC model.
+void CALLCONV FF_UNIFACParams(int numData, const int data[][3], FF_UnifacData *uni);
+
+//Calculates activity coefficients according to UNIFAC model, at given T and composition.
+void CALLCONV FF_ActivityUNIFAC(FF_UnifacData *data, const double *T,const double x[], double lnGammaC[], double lnGammaR[], double *gE);
+
 //Calculates fugacity and activity coefficients, at given T and composition, from an activity model
 void CALLCONV FF_PhiFromActivity(const int *numSubs,enum FF_ActModel *model,const  FF_BaseProp baseProp[],const double pintParam[],
                                  const enum FF_IntParamForm *form,const bool *useVp,const enum FF_EosType *eosType,const void *data,

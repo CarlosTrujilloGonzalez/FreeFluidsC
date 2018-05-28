@@ -869,10 +869,13 @@ void CALLCONV FF_MixVfromTPeos(const enum FF_EosType *eosType,const enum FF_Mixi
 
     //printf("T:%f  P:%f Vl:%f ArrL:%f Zl:%f\n",*T,*P,resultL[0],resultL[1],resultL[2]);
     if (*option=='s'){
-        if ((*state=='b')&&(fabs((resultL[0]-resultG[0])/resultL[0])>0.001)){
+        if (*state=='b'){
+            if (fabs((resultL[0]-resultG[0])/resultL[0])>0.001){
                 if ((resultL[1]+resultL[2]-1-log(resultL[2]))<(resultG[1]+resultG[2]-1-log(resultG[2]))) *state='L';//we compare Gdr
                 else if ((resultL[1]+resultL[2]-1-log(resultL[2]))>(resultG[1]+resultG[2]-1-log(resultG[2]))) *state='G';
                 else *state='E';//if Gdr is the same we are in equilibrium
+            }
+            else *state='U';
         }
     }
 }
