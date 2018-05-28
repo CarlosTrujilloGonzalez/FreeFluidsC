@@ -165,6 +165,9 @@ void CALLCONV FF_CorrelationResult(const int *eq,const double coef[],const int *
             y[i]=coef[0]*exp(coef[1]*pow(Tm,0.4)+coef[2]*Tm+coef[3]*pow(Tm,2.1)+coef[4]*pow(Tm,5.6));
         }
         break;
+    case FF_Tait://Tait equation with P=1e5, V=(a+b*T+c*T^2)*(1-0.0894*ln(1+P/(d*exp(-e*T))). Liquid volume
+        for (i=0;i<*nPoints;i++) y[i]=(coef[0]+coef[1]*x[i]+coef[2]*pow(x[i],2))*(1-0.0894*log(1+1e5/(coef[3]*exp(-coef[4]*x[i]))));
+        break;
     }
 }
 
@@ -174,7 +177,7 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
     int i;
     int eq;
     //First we convert the input variable if necessary
-    if (*cor==22) for (i=0;i<*nPoints;i++) x[i]=x[i]-273.15;
+    if ((*cor==22)||(*cor==240)) for (i=0;i<*nPoints;i++) x[i]=x[i]-273.15;
     //Second we chose the calculation equation to use
     switch (*cor){
     case 1://DIPPR 100 Cp0 in KJ/kgr·K
@@ -184,6 +187,7 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
     case 16://DIPPR 100 Liquid Cp in J/Kmol·K
     case 17://DIPPR 100 Liquid Cp in J/kgr·K
     case 40://DIPPR 100 Liquid density in kgr/m3
+    case 49://DIPPR 100 Liquid density in cm3/mol
     case 50://DIPPR 100 Liquid thermal conductivity W/(m·K)
     case 60://DIPPR 100 Liquid surface tension N/m
     case 63://DIPPR 100 Liquid surface tension dyna/cm
@@ -276,6 +280,9 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
     case 101:
         eq=FF_WagnerGd;
         break;
+    case 240://Tait equation for polymer density in m3/kg at 1 bar
+        eq=FF_Tait;
+        break;
     }
 
     FF_CorrelationResult(&eq,coef,nPoints,x,y);//We make the calculations
@@ -324,6 +331,12 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
         break;
     case 33://Extended Andrade 1 in cP/MW
         for (i=0;i<*nPoints;i++) y[i]=y[i]* *MW*1e-3;
+        break;
+    case 49://DIPPR 100 Liquid density in cm3/mol
+        for (i=0;i<*nPoints;i++) y[i]=*MW*1e3/y[i];
+        break;
+    case 240://Tait equation for polymer density in m3/kg at 1 bar
+        for (i=0;i<*nPoints;i++) y[i]=1/y[i];
     }
     //Last we reconvert the input variable if necessary
     if (*cor==22) for (i=0;i<*nPoints;i++) x[i]=x[i]+273.15;
@@ -415,5 +428,17 @@ void CALLCONV FF_LiqDensChuehPrausnitz(const  FF_BaseProp *baseProp, const int *
         Tr=T[i]/baseProp->Tc;
         N=(1-0.89*baseProp->w)*exp(6.9547-76.2853*Tr+191.306*Tr*Tr-203.5472*pow(Tr,3)+82.763*pow(Tr,4));
         rho[i]=pow((1+9*baseProp->Zc*N*(P[i]-Vp[i])/baseProp->Pc),0.11111)*rhoin[i];
+    }
+}
+
+//Tait equation for polymer density, with T and P dependence
+void CALLCONV FF_LiqDensTait(const int *eq,const double coef[],const  FF_BaseProp *baseProp, const int *nPoints,const double T[],const double P[], double rho[]){
+    int i;
+    double Tu;
+    for(i=0;i<*nPoints;i++){
+        if (*eq==240) Tu=T[i]-273.15;
+        else Tu=T[i];
+        rho[i]=(coef[0]+coef[1]*Tu+coef[2]*pow(Tu,2))*(1-0.0894*log(1+P[i]/(coef[3]*exp(-coef[4]*Tu))));
+        if (*eq==240) rho[i]=1/rho[i];//As Tait equation gives volume
     }
 }

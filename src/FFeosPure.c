@@ -86,7 +86,7 @@ void CALLCONV FF_FixedParamCubic(const  FF_CubicEOSdata *data, FF_CubicParam *pa
         //else param->c=0;
         param->c=data->c;
         break;
-    case FF_PRFIT3://similar to FF_PRSV1, some parameters have no relationship with critical properties. There are 3 adjustable parameters:a, fw, k1
+    case FF_PRFIT3://similar to FF_PRSV1, some parameters have no relationship with critical properties. There are 3 adjustable parameters:a, Tc, k1
         param->a = data->k1;
         param->b = 0.9*0.0778 * R * data->Tc / data->Pc;
         param->u=1+pow(2,0.5);//1+2^0.5
@@ -95,7 +95,7 @@ void CALLCONV FF_FixedParamCubic(const  FF_CubicEOSdata *data, FF_CubicParam *pa
         else if ((data->c==0)&&(data->Zc>0)&&(data->Zc<0.5)) param->c=R*data->Tc/data->Pc*(0.1014048-0.3892896*data->Zc);
         else param->c=0;
         break;
-    case FF_PRFIT4://parameters have no relationship with critical properties. There are 4 adjustable parameters:b,a,fw and Tc
+    case FF_PRFIT4://parameters have no relationship with critical properties. There are 4 adjustable parameters:b,a,w and Tc
         param->a = data->k2;
         param->b = data->k1;
         param->u=1+pow(2,0.5);//1+2^0.5
@@ -253,7 +253,7 @@ EXP_IMP void CALLCONV FF_ThetaDerivCubic(const double *T,const  FF_CubicEOSdata 
             d2Alpha=d2Alpha0+data->w*(d2Alpha1-d2Alpha0);
         }
         break;
-    case FF_PRFIT3://FF_PRSV1 with some parameters no related to critical properties, 3 adjustable parameters instead of a, fw and k1 (now k3)
+    case FF_PRFIT3://FF_PRSV1 with some parameters no related to critical properties, 3 adjustable parameters instead of a, Tc and k1 (now k3)
         fw = 0.378893 + 1.4897153 * data->w - 0.17131848 * pow(data->w,2) + 0.0196554 * pow(data->w,3);
         Tr = *T / data->k2;
         Tx = 1-pow(Tr,0.5);//As it is a common calculation, it is better to do it once
@@ -263,7 +263,7 @@ EXP_IMP void CALLCONV FF_ThetaDerivCubic(const double *T,const  FF_CubicEOSdata 
         dAlpha=2*pow(Alpha,0.5)*(fw*dTx+data->k3*(2*Tr-1.7)/data->k2);
         d2Alpha=0.5*dAlpha*dAlpha/Alpha+2*pow(Alpha,0.5)*(fw*d2Tx+data->k3*2/pow(data->k2,2));
         break;
-    case FF_PRFIT4://PR with parameters no related to critical properties. There are 4 adjustable parameters:b,a,fw and Tc
+    case FF_PRFIT4://PR with parameters no related to critical properties. There are 4 adjustable parameters:b,a,w and Tc
         fw = 0.37464 + 1.54226 * data->k3 - 0.26992 * data->k3 * data->k3;
         Tr = *T / data->k4;
         Tx = 1-pow(Tr,0.5);//As it is a common calculation, it is better to do it once
@@ -1135,8 +1135,10 @@ void CALLCONV FF_PfromTVeos(const enum FF_EosType *eosType,const double *T,const
     }
 }
 
-//V,Arr and Z calculation for a pure substance, given T and P by eos. *state= L,only liquid, G:only gas, U:unique, E:equilibrium, F:fail
-//--------------------------------------------------------------------------------------------------------------------------------------
+//V,Arr and Z calculation for a pure substance, given T and P by eos. *state= l:probably liquid, g:probably gas,
+//--------------------------------------------------------------------------------------------------------------
+// L:liquid, G:gas, U:unique, E:equilibrium, F:fail
+//-------------------------------------------------
 void CALLCONV FF_VfromTPeos(const enum FF_EosType *eosType,const double *T,const double *P,const void *data,const char *option,double resultL[3],double resultG[3],char *state)
 {
     //printf("P:%f",*P);
@@ -1167,10 +1169,13 @@ void CALLCONV FF_VfromTPeos(const enum FF_EosType *eosType,const double *T,const
     }
     //printf("T:%f  P:%f Vl:%f ArrL:%f Zl:%f\n",*T,*P,resultL[0],resultL[1],resultL[2]);
     if (*option=='s'){
-        if ((*state=='b')&&(fabs((resultL[0]-resultG[0])/resultL[0])>0.001)){
+        if (*state=='b'){
+            if (fabs((resultL[0]-resultG[0])/resultL[0])>0.001){
                 if ((resultL[1]+resultL[2]-1-log(resultL[2]))<(resultG[1]+resultG[2]-1-log(resultG[2]))) *state='L';//we compare Gdr
                 else if ((resultL[1]+resultL[2]-1-log(resultL[2]))>(resultG[1]+resultG[2]-1-log(resultG[2]))) *state='G';
                 else *state='E';//if Gdr is the same we are in equilibrium
+            }
+            else *state='U';
         }
     }
 }
@@ -1179,10 +1184,11 @@ void CALLCONV FF_VfromTPeos(const enum FF_EosType *eosType,const double *T,const
 //-------------------------
 void CALLCONV FF_TbEOS(const enum FF_EosType *eosType,const double *P,const void *data,double *Tb)
 {
-    int n=0;//number of calculations don
+    int n=0;//number of calculations done
     //printf("hola soy Tb\n");
-    double Tc,Pc;
-    switch (*eosType)
+    double Tc,Pc,w;
+    int i;
+    switch (*eosType)//We read Tc,Pc and w. and in the case of IAPWS95 we calculate directly the Tb
     {
         case FF_SAFTtype:
             if ((( FF_SaftEOSdata*)data)->eos==FF_PCSAFTPOL1){
@@ -1191,6 +1197,7 @@ void CALLCONV FF_TbEOS(const enum FF_EosType *eosType,const double *P,const void
             }
             Tc=(( FF_SaftEOSdata*)data)->Tc;
             Pc=(( FF_SaftEOSdata*)data)->Pc;
+            w=(( FF_SaftEOSdata*)data)->w;
             break;
         case FF_SWtype:
             if (((( FF_SWEOSdata*)data)->eos==FF_IAPWS95)||((( FF_SWEOSdata*)data)->eos==IF97)){
@@ -1213,6 +1220,7 @@ void CALLCONV FF_TbEOS(const enum FF_EosType *eosType,const double *P,const void
             }
             Tc=(( FF_SWEOSdata*)data)->Tc;
             Pc=(( FF_SWEOSdata*)data)->Pc;
+            w=(( FF_SWEOSdata*)data)->w;
             break;
         default://Cubic eos
             if (((( FF_CubicEOSdata*)data)->eos==FF_PRPOL1)||((( FF_CubicEOSdata*)data)->eos==FF_SRKPOL2)){
@@ -1221,45 +1229,62 @@ void CALLCONV FF_TbEOS(const enum FF_EosType *eosType,const double *P,const void
             }
             Tc=(( FF_CubicEOSdata*)data)->Tc;
             Pc=(( FF_CubicEOSdata*)data)->Pc;
+            w=(( FF_CubicEOSdata*)data)->w;
             break;
     }
-    if ((*P>=Pc)&&(!(Pc==0)))
+    if ((*P>=Pc)&&(!(Pc==0)))//If P>=Pc -> Tb=Tc
     {
         *Tb=Tc;
     }
-    else
+    else//We need to calculate Tb
     {
-        if (Tc==0) Tc=800.0;
         double T,phiL,phiG;//Temperature and fugacity coef.
         double answerL[3],answerG[3];
-        char option='b',state;
-        T=Tc/2;//Initial temperature guess
+        char option='s',state;
+        if ((Tc>0)&&(Pc>0)&&(w>0)){//If possible we approximate using the Wilson equation
+            T=Tc/(1+log(Pc/ *P)/(5.737*(1+w)));
+            i=16;
+        }
+        else{
+            if (Tc==0) Tc=800.0;
+            T=Tc/2;//Initial temperature guess
+            i=4;//i will be used in the calculation of the new temperature
+        }
+        //printf("Initial Tb guess: %f\n",T);
         FF_VfromTPeos(eosType,&T,P,data,&option,answerL,answerG,&state);
         //printf("T:%f  Vliq:%f  Vgas:%f\n",T,answerL[0],answerG[0]);
-        int i=4;//i will be used in the calculation of the new temperature
 
-        while (!((answerL[0]>0) && (answerG[0]>0) && ((fabs(answerL[0]-answerG[0])/answerL[0])>0.002)))//Till we find a temperature with different possitive liquid and gas solutions
+
+        while (!((state=='L')||(state=='G')||(state=='E')))//Till we find a temperature with different possitive liquid and gas solutions
         {
             if (state=='g')T=T-Tc/i;
             else if (state=='l') T=T+Tc/i;
-            if ((state=='b')&&(((fabs(answerL[0]-answerG[0])/answerL[0])<=0.002))){//If we have found only one result
-                if (answerL[2]<0.2) T=T+Tc/i;
-                else if (answerL[2]>0.5) T=T-Tc/i;
-                else//if we are not sure about if it is liquid or gas
+            else if ((state=='U')||(state='f'))//If we have found only one result from both sides but state is not known, or none
+            {
+                T=T+Tc/i;//we go up
+                FF_VfromTPeos(eosType,&T,P,data,&option,answerL,answerG,&state);//and try if it is clear
+                if (!((state=='g')||(state=='G')||(state=='l')||(state=='L')))//if not clear
                 {
-                    double Vprov=answerL[0]*0.7,ArrProv,Zprov;
-                    FF_ArrZfromTVeos(eosType,&T,&Vprov,data,&ArrProv,&Zprov);
-                    //printf("Finding by Z n:%i i:%i  Vl:%f  Zl:%f  Vprov:%f  Zprov:%f\n",n,i/2,answerL[0],answerL[2],Vprov,Zprov);
-                    if (Zprov<(answerL[2]-0.06)) T=T-Tc/i;
-                    else if (Zprov>(answerL[2]-0.03)) T=T+Tc/i;
+                    T=T-2*Tc/i;//we go down
+                    FF_VfromTPeos(eosType,&T,P,data,&option,answerL,answerG,&state);//we try again
+                    if (!((state=='g')||(state=='G')||(state=='l')||(state=='L')))//if it is still not clear
+                    {
+                         T=T+Tc/i;// we left T as it was
+                         double Vprov=answerL[0]*0.7,ArrProv,Zprov;//We decrease volume
+                         FF_ArrZfromTVeos(eosType,&T,&Vprov,data,&ArrProv,&Zprov);
+                         //printf("Finding by Z n:%i i:%i  Vl:%f  Zl:%f  Vprov:%f  Zprov:%f\n",n,i/2,answerL[0],answerL[2],Vprov,Zprov);
+                         if (Zprov<(answerL[2]-0.06)) T=T-Tc/i;
+                         else if (Zprov>(answerL[2]-0.03)) T=T+Tc/i;
 
-                    else {
-                        *Tb=T;
-                        return;
+                         else {
+                             *Tb=T;
+                             return;
+                         }
                     }
-                }
-            }
 
+                }
+
+            }
             FF_VfromTPeos(eosType,&T,P,data,&option,answerL,answerG,&state);
             i=i*2;
             n=n+1;
@@ -1300,7 +1325,8 @@ void CALLCONV FF_VpEOS(const enum FF_EosType *eosType,const double *T,const void
     //printf("Hola, soy Vp, EOS type:%i\n",*eosType);
     int n=0;//number of calculations done
     double phiMaxError;
-    double Tc,Pc;
+    double Tc,Pc,w;
+    int i;
     switch (*eosType)
     {
         case FF_SAFTtype:
@@ -1310,6 +1336,7 @@ void CALLCONV FF_VpEOS(const enum FF_EosType *eosType,const double *T,const void
             }
             Tc=(( FF_SaftEOSdata*)data)->Tc;
             Pc=(( FF_SaftEOSdata*)data)->Pc;
+            w=(( FF_SaftEOSdata*)data)->w;
             phiMaxError=0.01;
             //printf("Tc:%f Pc:%f sigma:%f m:%f epsilon:%f \n",Tc,Pc,(( FF_SaftEOSdata*)data)->sigma,(( FF_SaftEOSdata*)data)->m,(( FF_SaftEOSdata*)data)->epsilon);
             break;
@@ -1333,6 +1360,7 @@ void CALLCONV FF_VpEOS(const enum FF_EosType *eosType,const double *T,const void
             }
             Tc=(( FF_SWEOSdata*)data)->Tc;
             Pc=(( FF_SWEOSdata*)data)->Pc;
+            w=(( FF_SWEOSdata*)data)->w;
             phiMaxError=0.001;
             break;
         //case FF_PRPOL1:
@@ -1348,6 +1376,7 @@ void CALLCONV FF_VpEOS(const enum FF_EosType *eosType,const double *T,const void
             }
             Tc=(( FF_CubicEOSdata*)data)->Tc;
             Pc=(( FF_CubicEOSdata*)data)->Pc;
+            w=(( FF_CubicEOSdata*)data)->w;
             phiMaxError=0.001;
             //printf("Hola, soy Vp cubic eos:%i T:%f Tc:%f Pc:%f w:%f k1:%f\n",*eosType,*T,Tc,Pc,(( FF_CubicEOSdata*)data)->w,(( FF_CubicEOSdata*)data)->k1);
             break;
@@ -1358,38 +1387,52 @@ void CALLCONV FF_VpEOS(const enum FF_EosType *eosType,const double *T,const void
         *Vp=1e12;
         //printf("T:%f Tc:%f\n",*T,Tc);
     }
-    else
+    else//We need to calculate Vp
     {
         double P,phiL,phiG;//Pressure and fugacity coef.
         double answerL[3],answerG[3];
-        char option='b',state;
-        if (Pc==0) Pc=200e5;
-        else P=Pc/2;//Initial pressure guess
-        //printf("Initial pressure guess:%f\n",P);
+        char option='s',state;
+        if ((Tc>0)&&(Pc>0)&&(w>0)){//If possible we approximate using the Wilson equation
+            P=Pc/exp(-5.737*(1+w)*(1-Tc/ *T));
+            i=16;
+        }
+        else{
+            if (Pc==0) Pc=250e5;
+            P=Pc/2;//Initial pressure guess
+            i=4;//i will be used in the calculation of the new temperature
+        }
+
+        //printf("Initial Vp guess:%f\n",P);
         FF_VfromTPeos(eosType,T,&P,data,&option,answerL,answerG,&state);
-        //printf("T:%f P:%f  Vl:%f  Zl:%f  Vg:%f  Zg:%f\n",*T,P,answerL[0],answerL[2],answerG[0],answerG[2]);
-        int i=4;//i will be used to help in the calculation of the new pressure
-
-        while (!((answerL[0]>0) && (answerG[0]>0) && ((fabs(answerL[0]-answerG[0])/answerL[0])>0.002)))//Till we find a pressure with different possitive liquid and gas solutions
+        //printf("T:%f P:%f  Vl:%f  Zl:%f  Vg:%f  Zg:%f state:%c\n",*T,P,answerL[0],answerL[2],answerG[0],answerG[2],state);
+        while (!((state=='L')||(state=='G')||(state=='E')))//Till we find a pressure with different possitive liquid and gas solutions
         {
-            if (state=='g')P=P+Pc/i;
-            else if (state=='l')P=P-Pc/i;
-            if ((state=='b')&&(((fabs(answerL[0]-answerG[0])/answerL[0])<=0.002))){//If there is no specific gas phase we decrease pressure 0.35 antes
-                if (answerL[2]<0.2) P=P-Pc/i;
-                else if (answerL[2]>0.5) P=P+Pc/i;
-                else//if we are not sure about if it is liquid or gas
+            if ((state=='g')||(answerL[2]>0.4))P=P+Pc/i;
+            else if ((state=='l')||(answerL[2]<0.2))P=P-Pc/i;
+            else//If we have found only one result from both sides but state is not known, or none
+            {
+                P=P+Pc/i;//we go up
+                FF_VfromTPeos(eosType,T,&P,data,&option,answerL,answerG,&state);//and try if it is clear
+                if (!((state=='g')||(state=='G')||(state=='l')||(state=='L')))//if not clear
                 {
-                    double Vprov=answerL[0]*0.7,ArrProv,Zprov;
-                    FF_ArrZfromTVeos(eosType,T,&Vprov,data,&ArrProv,&Zprov);
-                    //printf("Finding by Z n:%i i:%i  Vl:%f  Zl:%f  Vprov:%f  Zprov:%f\n",n,i/2,answerL[0],answerL[2],Vprov,Zprov);
-                    if (Zprov<(answerL[2]-0.06)) P=P+Pc/i;
-                    else if (Zprov>(answerL[2]-0.03)) P=P-Pc/i;
-
-                    else {
-                        *Vp=P;
-                        return;
+                    P=P-2*Pc/i;//we go down
+                    FF_VfromTPeos(eosType,T,&P,data,&option,answerL,answerG,&state);//we try again
+                    if (!((state=='g')||(state=='G')||(state=='l')||(state=='L')))//if it is still not clear
+                    {
+                        P=P+Pc/i;// we left P as it was
+                        double Vprov=answerL[0]*0.7,ArrProv,Zprov;
+                        FF_ArrZfromTVeos(eosType,T,&Vprov,data,&ArrProv,&Zprov);
+                        //printf("Finding by Z n:%i i:%i  Vl:%f  Zl:%f  Vprov:%f  Zprov:%f\n",n,i/2,answerL[0],answerL[2],Vprov,Zprov);
+                        if (Zprov<(answerL[2]-0.06)) P=P+Pc/i;
+                        else if (Zprov>(answerL[2]-0.03)) P=P-Pc/i;
+                        else {
+                            *Vp=0;
+                             return;
+                         }
                     }
+
                 }
+
             }
 
             FF_VfromTPeos(eosType,T,&P,data,&option,answerL,answerG,&state);
@@ -1405,7 +1448,7 @@ void CALLCONV FF_VpEOS(const enum FF_EosType *eosType,const double *T,const void
         phiG=exp(answerG[1]+answerG[2]-1)/answerG[2];
         //printf("Initial phi calculation T:%f P:%f  phiL:%f  phiG:%f\n",*T,P,phiL,phiG);
         while ((phiL<0.3)){
-            P=0.5*P;
+            P=0.7*P;
             FF_VfromTPeos(eosType,T,&P,data,&option,answerL,answerG,&state);
             phiL=exp(answerL[1]+answerL[2]-1)/answerL[2];
             phiG=exp(answerG[1]+answerG[2]-1)/answerG[2];

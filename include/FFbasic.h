@@ -67,7 +67,7 @@ enum FF_IntParamForm{FF_NoForm,FF_Pol1,FF_Pol1K,FF_Pol1J,FF_Pol1C,FF_Pol2,FF_Pol
 //FF_Ant3: a+b/T+c*ln(T)+d*T+e/T^2.
 //In case the result contains energy, K,J,C indicates if the energy is expresed in K, Joules o Calories
 
-typedef struct {int id;double MW,Tc,Pc,Vc,Zc,w,Zra,r,q,qRes,mu,Tb;}FF_BaseProp;
+typedef struct {int id;double MW,MWmono,Tc,Pc,Vc,Zc,w,Zra,r,q,qRes,mu,Tb;}FF_BaseProp;
 typedef struct {double x,y;}FF_SinglePointData;
 typedef struct {double a,Theta,b,c,u,w,dTheta,d2Theta;}FF_CubicParam;
 typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,VdWV,c,k1,k2,k3,k4;}FF_CubicEOSdata;
@@ -84,11 +84,13 @@ typedef struct {int id,form;double coef[13],limI,limS;}FF_Correlation;
 enum FF_CorrEquation{FF_DIPPR100,FF_Polynomial,FF_Polynomial2,FF_DIPPR100Ld,FF_expDIPPR100,FF_DIPPR101,FF_DIPPR101Vp,FF_DIPPR101Lv,FF_logDIPPR101,
                   FF_DIPPR102,FF_DIPPR103,FF_DIPPR104,FF_DIPPR105,FF_DIPPR106,FF_DIPPR106Hv,FF_DIPPR106Ld,FF_DIPPR106SurfT,FF_DIPPR107,
                   FF_DIPPR107Cp,FF_DIPPR114,FF_DIPPR115,FF_DIPPR116,FF_DIPPR116Ld,FF_Wilhoit,FF_Cooper,FF_Jaechske,FF_ChemSep16,FF_Antoine1,
-                  FF_Antoine2,FF_Wagner25,FF_Wagner36,FF_PPDS9,FF_PPDS10,FF_PCWIN,FF_Rackett,FF_ExtAndrade1,FF_ExtAndrade2,FF_ChericVisc,FF_WagnerGd};
+                  FF_Antoine2,FF_Wagner25,FF_Wagner36,FF_PPDS9,FF_PPDS10,FF_PCWIN,FF_Rackett,FF_ExtAndrade1,FF_ExtAndrade2,FF_ChericVisc,FF_WagnerGd,FF_Tait};
 
-enum FF_ActModel{FF_NoModel,Wilson,NRTL,UNIQUAC};
+enum FF_ActModel{FF_NoModel,FF_Wilson,FF_NRTL,FF_UNIQUAC,FF_UNIFACStd,FF_UNIFACPSRK,FF_UNIFACDort,FF_UNIFACNist,FF_EntropicFV,FF_UNIFACZM};
 
 typedef struct {int id,model;double refT,refP;FF_BaseProp baseProp;FF_SinglePointData cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,gVisc,gThC,sDens,sCp;FF_CubicEOSdata cubicData;FF_SaftEOSdata saftData;FF_SWEOSdata swData;FF_Correlation cp0Corr,vpCorr,btCorr,hVsatCorr,lCpCorr,lDensCorr,lViscCorr,
                 lThCCorr,lSurfTCorr,gDensCorr,gViscCorr,gThCCorr,sDensCorr,sCpCorr;}FF_SubstanceData;
 
+//Prepared for 20 substances and 30 subgroups. FV must be filled with the free volume of each substance if EntropicFV model is to be used
+typedef struct {int model,numSubs,numSubg,subgroup[30][2],subsSubg[20][30];double subgData[30][2], subgInt[30][30][3],subsR[20],subsQ[20],FV[20];}FF_UnifacData;
 #endif /* FFBASIC_H */
