@@ -168,6 +168,13 @@ void CALLCONV FF_CorrelationResult(const int *eq,const double coef[],const int *
     case FF_Tait://Tait equation with P=1e5, V=(a+b*T+c*T^2)*(1-0.0894*ln(1+P/(d*exp(-e*T))). Liquid volume
         for (i=0;i<*nPoints;i++) y[i]=(coef[0]+coef[1]*x[i]+coef[2]*pow(x[i],2))*(1-0.0894*log(1+1e5/(coef[3]*exp(-coef[4]*x[i]))));
         break;
+    case FF_ExtWagner://Wagner equation with 6 terms
+        for (i=0;i<*nPoints;i++){
+            Tm=1-x[i]/coef[1];
+            y[i]=coef[0]*exp(coef[1]*(coef[2]*pow(Tm,coef[3])+coef[4]*pow(Tm,coef[5])+coef[6]*pow(Tm,coef[7])+coef[8]*pow(Tm,coef[9])+
+                    coef[10]*pow(Tm,coef[11])+coef[12]*pow(Tm,coef[13]))/x[i]);
+        }
+        break;
     }
 }
 
@@ -253,6 +260,9 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
         break;
     case 25://Wagner 36 in K and Pa
         eq=FF_Wagner36;
+        break;
+    case 26://Wagner 36 in K and Pa
+        eq=FF_ExtWagner;
         break;
     case 31://Extended Andrade 1 in cP
     case 33://Extended Andrade 1 in cP/MW
@@ -442,3 +452,89 @@ void CALLCONV FF_LiqDensTait(const int *eq,const double coef[],const  FF_BasePro
         if (*eq==240) rho[i]=1/rho[i];//As Tait equation gives volume
     }
 }
+
+//Gas viscosity. Low density calculation only valid at T>0.7*Tc. Pressure correction is OK
+void CALLCONV FF_GasViscPrediction(double *T,double *V,FF_BaseProp *data,double *ldVisc,double *visc){
+    double omega,Ta,sigma,Fc,muR,muR4,k;
+    double E[10],y,G1,G2,eta2,eta1;
+    int i;
+    //Chung method
+    Ta=1.2593* *T/data->Tc;
+    sigma= 0.809*pow(data->Vc,0.33333);
+    omega= 1.16145*pow(Ta,- 0.14874)+0.52487*exp(- 0.7732*Ta)+2.16178*exp(- 2.43787*Ta);
+    if ((data->mu<99)&&(data->mu>0)) muR=131.3*data->mu/pow(data->Vc*1e6*data->Tc,0.5);
+    else muR=0;
+    muR4=muR*muR*muR*muR;
+    if(data->type==10) k=0.076;//Water
+    else if(data->type==11) k=0.0682+4.74/data->MW;//alcohol
+    else if(data->type==12) k=0.0682+4.74*2/data->MW;//Polyol
+    else k=0;
+    Fc=1-0.2756*data->w+0.059035*muR4+k;
+    if(*ldVisc==0) *ldVisc=26.692*Fc*pow((data->MW* *T),0.5)*1e-11/(sigma*sigma*omega);
+    //printf("MuR:%f Ta:%f omega:%f Fc:%f l.d. visc:%f\n",muR,Ta,omega,Fc,*ldVisc);
+
+    /*//Lucas system. Very symilar in results to the Chung one
+    double Tr,muRl,Fp,Xi,prod;
+    Tr=*T/data->Tc;
+    muRl=52.46*data->mu*data->mu*data->Pc*1e-5/(data->Tc*data->Tc);
+    if(muRl<0.022) Fp=1;
+    else if(muRl<0.075) Fp=1+30.55*pow((0.292-data->Zc),1.72);
+    else if(muRl<10) Fp=1+30.55*pow((0.292-data->Zc),1.72)*(0.96+0.1*(Tr-0.7));
+    else Fp=1;
+    Xi=0.176*pow(data->Tc/(data->MW*data->MW*data->MW*data->Pc*data->Pc*data->Pc*data->Pc*1e-20),0.166667);
+    prod=Fp*(0.807*pow(Tr,0.618)-0.357*exp(-0.449*Tr)+0.34*exp(-4.058*Tr)+0.018);
+    ldVisc=prod*1e-7/Xi;
+    //printf("Tr:%f MuRl:%f Xi:%f Fp:%f prod:%f ldVisc:%f\n",Tr,muRl,Xi,Fp,prod,*ldVisc);
+    */
+
+    //Pressure correction
+    double coef[10][4]={{6.324,50.412,-51.680,1189.0},{1.210e-3,-1.154e-3,-6.257e-3,0.03728},{5.283,254.209,-168.48,3898},{6.623,38.096,-8.464,31.42},
+                        {19.745,7.63,-14.354,31.53},{-1.9,-12.537,4.985,-18.15},{24.275,3.45,-11.291,69.35},{0.7972,1.117,0.01235,-4.117},
+                        {-0.2382,0.0677,-0.8163,4.025},{0.06863,0.3479,0.5926,-0.727}};
+
+    for(i=0;i<10;i++) E[i]=coef[i][0]+coef[i][1]*data->w+coef[i][2]*muR4+coef[i][3]*k;
+    y=data->Vc/(6* *V);
+    G1=(1-0.5*y)/(pow((1-y),3));
+    G2=(E[0]*((1-exp(-E[3]*y))/y)+E[1]*G1*exp(E[4]*y)+E[2]*G1)/(E[0]*E[3]+E[1]+E[2]);
+    eta2=E[6]*y*y*G2*exp(E[7]+E[8]/Ta+E[9]/(Ta*Ta));
+    eta1=pow(Ta,0.5)*(Fc*(1/G2+E[5]*y))/omega+eta2;
+    if(eta1>1) *visc=*ldVisc*eta1;
+    else *visc=*ldVisc;
+    //printf("Ta:%f omega:%f muR:%f Fc:%f ldVisc:%f y:%f G1:%f G2:%f eta2:%f eta1:%f\n",Ta,omega,muR,Fc,*ldVisc,y,G1,G2,eta2,eta1);
+    //for(i=0;i<10;i++) printf("E[%i]:%f\n",i,E[i]);
+}
+
+//SurfaceTension. Very good approximation is obtained
+void CALLCONV FF_SurfTensionPrediction(double *T,FF_BaseProp *data,double *surfTens){
+    //double Tm=1- *T/data->Tc;
+    //*surfTens=kb*data->Tc*pow((Av/data->Vc),0.666667)*(4.35+4.14*data->w)*pow(Tm,1.26)*(1+0.19*pow(Tm,0.5)-0.25*Tm);//Not good for alcohols
+    //Use Sastri-Rao
+    double k,x,y,z,m;
+    switch(data->type){
+    case 11://Alcohols
+    case 12:
+        k=2.28;
+        x=0.25;
+        y=0.175;
+        z=0;
+        m=0.8;
+        break;
+    case 20://Acids
+        k=0.125;
+        x=0.5;
+        y=-1.5;
+        z=1.85;
+        m=1.222;
+        break;
+    default:
+        k=0.158;
+        x=0.5;
+        y=-1.5;
+        z=1.85;
+        m=1.222;
+        break;
+    }
+    *surfTens=k*pow(data->Pc*1e-5,x)*pow(data->Tb,y)*pow(data->Tc,z)*pow(((1- *T/data->Tc)/(1-data->Tb/data->Tc)),m)*1e-3;
+}
+
+

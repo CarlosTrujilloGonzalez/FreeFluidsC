@@ -126,6 +126,7 @@ void FFsolverRegula(double (*f)(double), double *x, double *y, int *n, double xm
     return;
 }
 
+//Regula Falsi, Illinois modification
 void FFsolverRegulaI(double (*f)(double), double *x, double *y, int *n, double xmin, double xmax, double *ftol, int *niter)//xmin and xmax define the interval
 {
     *n=0;
@@ -179,7 +180,7 @@ void FFsolverRegulaI(double (*f)(double), double *x, double *y, int *n, double x
     return;
 }
 
-
+//Regula Falsi, Anderson-Bjork modification
 void FFsolverRegulaA(double (*f)(double), double *x, double *y, int *n, double xmin, double xmax, double *ftol, int *niter)//xmin and xmax define the interval
 {
     *n=0;

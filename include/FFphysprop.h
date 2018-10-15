@@ -83,6 +83,12 @@ void CALLCONV FF_LiqDensChuehPrausnitz(const  FF_BaseProp *baseProp, const int *
 //Tait equation for polymer density, with T and P dependence
 void CALLCONV FF_LiqDensTait(const int *eq,const double coef[],const  FF_BaseProp *baseProp, const int *nPoints,const double T[],const double P[], double rho[]);
 
+//Viscosity
+EXP_IMP void CALLCONV FF_GasViscPrediction(double *T,double *V,FF_BaseProp *data,double *ldVisc,double *visc);
+
+//Surface tension
+EXP_IMP void CALLCONV FF_SurfTensionPrediction(double *T,FF_BaseProp *data,double *surfTens);
+
 #ifdef __cplusplus
 }
 #endif

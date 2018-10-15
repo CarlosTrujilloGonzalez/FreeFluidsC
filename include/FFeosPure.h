@@ -54,6 +54,11 @@ extern "C"
 //Single substance calculations
 //=============================
 
+//Get substance data from an exported file
+EXP_IMP FF_SubstanceData * CALLCONV FF_SubsDataFromFile(const char *name);
+//Write a substance data to a file. Adds ".sd" extension
+EXP_IMP void CALLCONV FF_SubsDataToFile(const char *name,FF_SubstanceData *subsData);
+
 //Single substance, cubic EOS calculations
 //----------------------------------------
 //Calculates u,w,b a cubic EOS. Using critical and others constants
@@ -74,14 +79,14 @@ EXP_IMP void CALLCONV FF_ArrDerCubic(const double *T,const double *V,const  FF_C
 //Auxiliary calculation for ArrZfromTVPCSAFT
 EXP_IMP void CALLCONV FF_calcI1I2(double m,double eta,double I[4]);
 //Arr and Z calculation for a pure substance, given T and V, according to FF_PCSAFT EOS
-EXP_IMP void CALLCONV FF_ArrZfromTVPCSAFT(const double *T,const double *V,const  FF_SaftEOSdata *data,double *Arr,double *Z);
+EXP_IMP void CALLCONV FF_ArrZfromTVSAFT(const double *T,const double *V,const  FF_SaftEOSdata *data,double *Arr,double *Z);
 //P calculation from T and V using according to FF_PCSAFT EOS
-EXP_IMP void CALLCONV FF_PfromTVPCSAFT(const double *T,const double *V,const  FF_SaftEOSdata *data,double *P);
+EXP_IMP void CALLCONV FF_PfromTVSAFT(const double *T,const double *V,const  FF_SaftEOSdata *data,double *P);
 //V,Arr and Z calculation for a pure substance, given T and P, according to FF_PCSAFT EOS
-EXP_IMP void CALLCONV FF_VfromTPPCSAFT(const double *T,const double *P,const  FF_SaftEOSdata *data,
+EXP_IMP void CALLCONV FF_VfromTPSAFT(const double *T,const double *P,const  FF_SaftEOSdata *data,
                                   const char *option,double resultL[3],double resultG[3],char *state);
 //Arr (reduced residual Helmholtz energy) and its partial derivatives calculation for a pure substance, given T and V, according to FF_PCSAFT EOS
-EXP_IMP void CALLCONV FF_ArrDerPCSAFT(const double *T,const double *V,const  FF_SaftEOSdata *data,double result[6]);
+EXP_IMP void CALLCONV FF_ArrDerSAFT(const double *T,const double *V,const  FF_SaftEOSdata *data,double result[6]);
 
 //Single substance, Span and Wagner EOS calculation
 //----------------------------------------
@@ -102,36 +107,36 @@ EXP_IMP void CALLCONV FF_ArrDerSWTV(const double *T,const double *V,const  FF_SW
 //Single substance common calculations
 //------------------------------------
 //Arr and dArr/dV at constant T calculation for a pure substance, given T and V by eos
-EXP_IMP void CALLCONV FF_ArrZfromTVeos(const enum FF_EosType *eosType,const double *T,const double *V,const void *data,double *Arr,double *Z);
+EXP_IMP void CALLCONV FF_ArrZfromTVeos(const int *eosType,const double *T,const double *V,const void *data,double *Arr,double *Z);
 //P calculation from T and V by eos
-EXP_IMP void CALLCONV FF_PfromTVeos(const enum FF_EosType *eosType,const double *T,const double *V,const void *data,double *P);
+EXP_IMP void CALLCONV FF_PfromTVeos(const int *eosType,const double *T,const double *V,const void *data,double *P);
 //V,Arr and Z calculation for a pure substance, given T and P by eos
-EXP_IMP void CALLCONV FF_VfromTPeos(const enum FF_EosType *eosType,const double *T,const double *P,const void *data,const char *option,double resultL[3],double resultG[3],char *state);
+EXP_IMP void CALLCONV FF_VfromTPeos(const int *eosType,const double *T,const double *P,const void *data,const char *option,double resultL[3],double resultG[3],char *state);
 //Boiling point calculation
-EXP_IMP void CALLCONV FF_TbEOS(const enum FF_EosType *eosType,const double *P,const void *data,double *Tb);
+EXP_IMP void CALLCONV FF_TbEOS(const int *eosType,const double *P,const void *data,double *Tb);
 //Vapor pressure calculation
-EXP_IMP void CALLCONV FF_VpEOS(const enum FF_EosType *eosType,const double *T,const void *data,double *Vp);
+EXP_IMP void CALLCONV FF_VpEOS(const int *eosType,const double *T,const void *data,double *Vp);
 
 //Thermodynamic properties calculation for a ideal gas at same T and V, from a reference state, specified by refT and refP, where H and S are 0
 EXP_IMP void CALLCONV FF_IdealThermoEOS(const int *equation,const double coef[],double *refT,double *refP, FF_ThermoProperties *th0);
 //Ideal gas thermodynamic properties of water calculation , from a reference state specified by the triple point where H and S are 0
 EXP_IMP void CALLCONV FF_IdealThermoWater( FF_ThermoProperties *th0);
 //Residual thermodynamic properties calculation from T and V, using EOS
-EXP_IMP void CALLCONV FF_ResidualThermoEOS(const enum FF_EosType *eosType,const void *data, FF_ThermoProperties *thR);
+EXP_IMP void CALLCONV FF_ResidualThermoEOS(const int *eosType,const void *data, FF_ThermoProperties *thR);
 //Residual extended thermodynamic properties calculation from T and V, using EOS
-EXP_IMP void CALLCONV FF_ExtResidualThermoEOS(const enum FF_EosType *eosType,const void *data, FF_ThermoProperties *thR);
+EXP_IMP void CALLCONV FF_ExtResidualThermoEOS(const int *eosType,const void *data, FF_ThermoProperties *thR);
 //Thermodynamic properties calculation from T and V, from a reference state (specified by T and P) where H and S are 0
-EXP_IMP void CALLCONV FF_ThermoEOS(const enum FF_EosType *eosType,const void *data,const int *equation,const double coef[],double *refT,double *refP, FF_ThermoProperties *th);
+EXP_IMP void CALLCONV FF_ThermoEOS(const int *eosType,const void *data,const int *equation,const double coef[],double *refT,double *refP, FF_ThermoProperties *th);
 
 //Calculation of thermo properties and liquid/gas fractions from P and H(or U or S)
-EXP_IMP void CALLCONV FF_ThermoEOSfromPX(const enum FF_EosType *eosType,const void *data,const int *equation,const double coef[],double *refT,double *refP,char *var,
+EXP_IMP void CALLCONV FF_ThermoEOSfromPX(const int *eosType,const void *data,const int *equation,const double coef[],double *refT,double *refP,char *var,
                                      FF_ThermoProperties *th,double *liqFraction);
 //Calculation of thermo properties and liquid/gas fractions from V and T(or U or S)
-EXP_IMP void CALLCONV FF_ThermoEOSfromVX(const enum FF_EosType *eosType,const void *data,const int *equation,const double coef[],double *refT,double *refP,char *var,
+EXP_IMP void CALLCONV FF_ThermoEOSfromVX(const int *eosType,const void *data,const int *equation,const double coef[],double *refT,double *refP,char *var,
                                      FF_ThermoProperties *th,double *liqFraction);
 
 //Calculation of T,V and liquid/gas fractions from S and P
-EXP_IMP void CALLCONV TVfromVHeos(const enum FF_EosType *eosType,const void *data,const  FF_Correlation *cp,double *refT,double *refP, FF_ThermoProperties *th,double *liqFraction);
+EXP_IMP void CALLCONV TVfromVHeos(const int *eosType,const void *data,const  FF_Correlation *cp,double *refT,double *refP, FF_ThermoProperties *th,double *liqFraction);
 
 #ifdef __cplusplus
 }
