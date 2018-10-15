@@ -54,43 +54,70 @@ extern const double R; //Pa·m3/(K·mol)
 extern const double FF_PCSAFTap[7][3];
 extern const double FF_PCSAFTbp[7][3];
 
-enum FF_EOS{FF_IdealGas,FF_PR76,FF_PR78,FF_PRSV1,FF_PRBM,FF_PRMELHEM,FF_PRSOF,FF_PRALMEIDA,FF_PRMC,FF_PRTWU91,FF_PRvTWU91,FF_PRTWU95,FF_PRPOL1,FF_PRFIT3,FF_PRFIT4,FF_PRFIT4B,FF_SRK,
-         FF_SRKSOF,FF_SRKMC,FF_SRKTWU91,FF_SRKPOL2,FF_PCSAFT,FF_PCSAFT1,FF_PCSAFT2B,FF_PCSAFT4C,FF_DPCSAFT_GV,FF_DPCSAFT_JC,FF_PCSAFTPOL1,FF_SW,FF_IAPWS95,IF97};//OK. Used
-enum FF_EosType{FF_NoType,FF_IdealType,FF_CubicType,FF_CubicPR,FF_CubicSRK,FF_SAFTtype,FF_SWtype};
-enum FF_MixingRule{FF_NoMixRul,FF_VdW,FF_PR,FF_MKP,MHV1,PSRK,HVOS,LCVM,MHV2,OPTgE,PSRKnew,VTPR};
+enum FF_EosType{FF_NoType,FF_IdealType,FF_CubicType,FF_CubicPRtype,FF_CubicSRKtype,FF_SAFTtype,FF_SWtype};
+enum FF_EOS{FF_IdealGas,FF_PR76,FF_PR78,FF_PRSV1,FF_PRBM,FF_PRMELHEM,FF_PRSOF,FF_PRALMEIDA,FF_PRMC,FF_PRTWU91,FF_PRvTWU91,FF_PRTWU95,FF_PRPOL1,FF_PRFIT3,FF_PRFIT4,FF_PRFIT4B,
+            FF_SRK,FF_SRKSOF,FF_SRKMC,FF_SRKTWU91,FF_SRKPOL2,
+            FF_PCSAFT,FF_PCSAFT1A,FF_PCSAFT2A,FF_PCSAFT2B,FF_PCSAFT3B,FF_PCSAFT4C,FF_PPCSAFT_GV,FF_PPCSAFT_JC,
+            FF_PPCSAFT1A_GV,FF_PPCSAFT2B_GV,FF_PPCSAFT2B_JC,FF_PPCSAFT3B_GV,FF_PPCSAFT4C_GV,FF_PCSAFTPOL1,
+            FF_SAFTVRMie,FF_SAFTVRMie1A,FF_SAFTVRMie2B,FF_SAFTVRMie4C,FF_PSAFTVRMie_GV,FF_PSAFTVRMie_JC,FF_SAFTVRMie2B_GV,FF_SAFTVRMie4C_GV,
+            FF_SW,FF_IAPWS95,IF97};
+enum FF_MixingRule{FF_NoMixRul,FF_VdW,FF_PR,FF_MKP,FF_HV,FF_MHV1,FF_PSRK,FF_HVOS,FF_LCVM,FF_MHV2,FF_UMR,FF_OPTgE,FF_PSRKnew,FF_VTPR,FF_VdWnoInt,FF_BL};
+enum FF_CorrEquation{FF_DIPPR100,FF_Polynomial,FF_Polynomial2,FF_DIPPR100Ld,FF_expDIPPR100,FF_DIPPR101,FF_DIPPR101Vp,FF_DIPPR101Lv,FF_logDIPPR101,
+                  FF_DIPPR102,FF_DIPPR103,FF_DIPPR104,FF_DIPPR105,FF_DIPPR106,FF_DIPPR106Hv,FF_DIPPR106Ld,FF_DIPPR106SurfT,FF_DIPPR107,
+                  FF_DIPPR107Cp,FF_DIPPR114,FF_DIPPR115,FF_DIPPR116,FF_DIPPR116Ld,FF_Wilhoit,FF_Cooper,FF_Jaechske,FF_ChemSep16,FF_Antoine1,
+                  FF_Antoine2,FF_Wagner25,FF_Wagner36,FF_PPDS9,FF_PPDS10,FF_PCWIN,FF_Rackett,FF_ExtAndrade1,FF_ExtAndrade2,FF_ChericVisc,FF_WagnerGd,FF_Tait,FF_ExtWagner};
+
+enum FF_ActModel{FF_NoModel,FF_Wilson,FF_NRTL,FF_UNIQUAC,FF_UNIQUACFV,FF_UNIFACStd,FF_UNIFACPSRK,FF_UNIFACDort,FF_UNIFACNist,FF_EntropicFV,FF_UNIFACZM,
+                 FF_Hildebrand,FF_Hansen,FF_Chi};
 enum FF_IntParamForm{FF_NoForm,FF_Pol1,FF_Pol1K,FF_Pol1J,FF_Pol1C,FF_Pol2,FF_Pol2K,FF_Pol2J,FF_Pol2C,FF_Pol3,FF_Pol3K,FF_Pol3J,FF_Pol3C,FF_Ant1,FF_Ant2,FF_Ant3};
-//FF_Pol1 corresponds to:a+b*T
-//FF_Pol2: a+b*T+c*T^2
+//FF_Pol1 corresponds to:a+b*T+c*T^2
+//FF_Pol2: a+b*T+c/T^2
 //FF_Pol3: a+b/T+c*T
 //FF_Ant1: a+b/T+c*ln(T)+d*T
 //FF_Ant2: a+b/T+c*ln(T)+d*T+e*T^2
 //FF_Ant3: a+b/T+c*ln(T)+d*T+e/T^2.
 //In case the result contains energy, K,J,C indicates if the energy is expresed in K, Joules o Calories
+enum FF_Units{FF_cal_cm3_05,FF_MPa_05};
 
-typedef struct {int id;double MW,MWmono,Tc,Pc,Vc,Zc,w,Zra,r,q,qRes,mu,Tb;}FF_BaseProp;
-typedef struct {double x,y;}FF_SinglePointData;
-typedef struct {double a,Theta,b,c,u,w,dTheta,d2Theta;}FF_CubicParam;
+typedef struct {int id,type,numMono,unifacPSRKSubg[10][2],unifacDortSubg[10][2];double MW,MWmono,Tc,Pc,Vc,Zc,w,Zra,r,q,qRes,VdWV,Vliq,FV,mu,Q,Tb,Hildebrand,
+                HansenD,HansenP,HansenH;}FF_BaseProp;
 typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,VdWV,c,k1,k2,k3,k4;}FF_CubicEOSdata;
-typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,sigma,m,epsilon,kAB,epsilonAB,mu,xp;int nPos,nNeg,nAcid;}FF_SaftEOSdata;
+typedef struct {double a,Theta,b,c,u,w,dTheta,d2Theta;}FF_CubicParam;
+typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,sigma,m,epsilon,lr,la,chi,kAB,epsilonAB,mu,xp,Q;int nPos,nNeg,nAcid;}FF_SaftEOSdata;
 typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,tRef,rhoRef,n[24],t[24];int d[24],c[24],nPol,nExp;}SWSEOSdata;
 typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,tRef,rhoRef,n[60],t[60],a[8],e[8],b[8],g[8],af[5],bf[5],
                 Af[5],Bf[5],Cf[5],Df[5],betaf[5];int d[60],c[55],nPol,nExp,nSpec,nFinal;}FF_SWEOSdata;
-typedef struct {double MW,T,P,V,A,G,S,U,H,dP_dT,dP_dV,Cv,Cp,SS,JT,IT;}FF_ThermoProperties;
-typedef struct {double MW,T,P,V,Vt,rho,Z,Arr,dP_dV,dP_dT,dArr_dT,d2Arr_dT2,Ar,Gd,Phi,Ur,Hr,Sr,Cvr,Cpr,U,H,S,Cv,Cp,SS,JT;}ThermoProp;//deprecated
-typedef struct {double uE,hE,gE;}ExcessProp;
-//typedef struct FF_Correlation{int form;double A,B,C,D,E,F,G,H,I,J,K,L,M,limI,limS;};//deprecated
-typedef struct {int id,form;double coef[13],limI,limS;}FF_Correlation;
+typedef struct {int id,form;double coef[14],limI,limS;}FF_Correlation;
+typedef struct {double x,y;}FF_SinglePointData;
+typedef struct {int id,model,UnifStdSubg[20][2],UnifPSRKSubg[20][2],UnifDortSubg[20][2],UnifNistSubg[20][2];double refT,refP;FF_BaseProp baseProp;
+                FF_SinglePointData cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,gVisc,gThC,sDens,sCp;FF_CubicEOSdata cubicData;FF_SaftEOSdata saftData;
+                FF_SWEOSdata swData;FF_Correlation cp0Corr,vpCorr,btCorr,hVsatCorr,lCpCorr,lDensCorr,lViscCorr,lThCCorr,lSurfTCorr,
+                gDensCorr,gViscCorr,gThCCorr,sDensCorr,sCpCorr;}FF_SubstanceDataOld;
 
-enum FF_CorrEquation{FF_DIPPR100,FF_Polynomial,FF_Polynomial2,FF_DIPPR100Ld,FF_expDIPPR100,FF_DIPPR101,FF_DIPPR101Vp,FF_DIPPR101Lv,FF_logDIPPR101,
-                  FF_DIPPR102,FF_DIPPR103,FF_DIPPR104,FF_DIPPR105,FF_DIPPR106,FF_DIPPR106Hv,FF_DIPPR106Ld,FF_DIPPR106SurfT,FF_DIPPR107,
-                  FF_DIPPR107Cp,FF_DIPPR114,FF_DIPPR115,FF_DIPPR116,FF_DIPPR116Ld,FF_Wilhoit,FF_Cooper,FF_Jaechske,FF_ChemSep16,FF_Antoine1,
-                  FF_Antoine2,FF_Wagner25,FF_Wagner36,FF_PPDS9,FF_PPDS10,FF_PCWIN,FF_Rackett,FF_ExtAndrade1,FF_ExtAndrade2,FF_ChericVisc,FF_WagnerGd,FF_Tait};
-
-enum FF_ActModel{FF_NoModel,FF_Wilson,FF_NRTL,FF_UNIQUAC,FF_UNIFACStd,FF_UNIFACPSRK,FF_UNIFACDort,FF_UNIFACNist,FF_EntropicFV,FF_UNIFACZM};
-
-typedef struct {int id,model;double refT,refP;FF_BaseProp baseProp;FF_SinglePointData cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,gVisc,gThC,sDens,sCp;FF_CubicEOSdata cubicData;FF_SaftEOSdata saftData;FF_SWEOSdata swData;FF_Correlation cp0Corr,vpCorr,btCorr,hVsatCorr,lCpCorr,lDensCorr,lViscCorr,
-                lThCCorr,lSurfTCorr,gDensCorr,gViscCorr,gThCCorr,sDensCorr,sCpCorr;}FF_SubstanceData;
+typedef struct {char name[30],CAS[22],description[150];int id,model,UnifStdSubg[20][2],UnifPSRKSubg[20][2],UnifDortSubg[20][2],UnifNistSubg[20][2];
+                double refT,refP;FF_BaseProp baseProp;FF_SinglePointData cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,gVisc,gThC,sDens,sCp;
+                FF_CubicEOSdata cubicData;FF_SaftEOSdata saftData;FF_SWEOSdata swData;FF_Correlation cp0Corr,vpCorr,btCorr,hVsatCorr,lCpCorr,
+                lDensCorr,lViscCorr,lThCCorr,lSurfTCorr, gDensCorr,gViscCorr,gThCCorr,sDensCorr,sCpCorr;}FF_SubstanceData;
 
 //Prepared for 20 substances and 30 subgroups. FV must be filled with the free volume of each substance if EntropicFV model is to be used
+//subgroups:List of subgroups with its groups.
 typedef struct {int model,numSubs,numSubg,subgroup[30][2],subsSubg[20][30];double subgData[30][2], subgInt[30][30][3],subsR[20],subsQ[20],FV[20];}FF_UnifacData;
+typedef struct {enum FF_ActModel model;enum FF_IntParamForm formula;enum FF_Units units;double deltaHil[2],deltaHan[2][3],chiData[3],V[2];}FF_FloryData;
+typedef struct{double lnGammaC,lnGammaSG,lnGammaR,gamma,dgEC,dgESG,dgER;}FF_SubsActivityData;
+typedef struct{double gEC,gESG,gER,gE,dgE_dT;}FF_ExcessData;
+typedef struct{int numSubs,thModelActEos,actModel,refVpEos,eosType,mixRule;}FF_ThermoModel;
+
+//thModelActEos=0 indicates that and activity model is used for the liquid phase and that the BIP will be for this activity model. =1 indicates EOS
+typedef struct {char name[30],CAS[15][22],description[150];int model,numSubs,thModelActEos,actModel,refVpEos,eosType,mixRule,intForm,id[15];
+                double refT,refP,intParam[15][15][6];FF_BaseProp baseProp[15];FF_UnifacData unifStdData,
+                unifPSRKData,unifDortData,unifNistData;FF_SinglePointData cp0[15],vp[15],hVsat[15],lCp[15],lDens[15],lVisc[15],lThC[15],lSurfT[15],
+                gVisc[15],gThC[15],sDens[15],sCp[15];FF_CubicEOSdata cubicData[15];FF_SaftEOSdata saftData[15];FF_SWEOSdata swData[15];
+                FF_Correlation cp0Corr[15],vpCorr[15],btCorr[15],hVsatCorr[15],lCpCorr[15],lDensCorr[15],lViscCorr[15],lThCCorr[15],lSurfTCorr[15],
+                gDensCorr[15],gViscCorr[15],gThCCorr[15],sDensCorr[15],sCpCorr[15];}FF_MixData;
+
+typedef struct {double MW,T,P,V,A,G,S,U,H,dP_dT,dP_dV,Cv,Cp,SS,JT,IT;}FF_ThermoProperties;//smaller record mainly for ideal gas calculations
+typedef struct {double fraction,MW,T,P,V,A,G,S,U,H,dP_dT,dP_dV,Cv,Cp,SS,JT,IT,ArrDer[6],c[15],subsPhi[15];}FF_PhaseThermoProp;//fraction stands for (phase moles)/(total mix moles)
+typedef struct {double MW,T,P;FF_PhaseThermoProp phase[4];}FF_MixThermoProp;
+typedef struct {double uE,hE,gE;}ExcessProp;
+
 #endif /* FFBASIC_H */

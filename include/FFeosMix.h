@@ -56,76 +56,91 @@ extern "C"
 //Mixture calculations
 //====================
 
+//Get mix data from an exported file
+EXP_IMP FF_MixData * CALLCONV FF_MixDataFromFile(const char *name);
+
+//Create mixture data structure from an array of substance data structures
+EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_SubstanceData *subsData[]);
+
+//Fill a Mixture data structure from an array of substance data structures
+EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int *numSubs,FF_SubstanceData *subsData[],FF_MixData *mixData);
+
+//Write a mixture data to a file. Adds ".md" extension
+EXP_IMP void CALLCONV FF_MixDataToFile(const char *name,FF_MixData *mix);
+
 //Mixture cubic EOS calculations
 //-------------------------------
+
+//Calculates Theta,b,c and their composition derivatives, given a cubic EOS,a mixing rule, composition, and pure substance parameters
+void CALLCONV FF_MixParamXderCubicEOS(const int *rule,const double *T,const int *numSubs,const  FF_CubicEOSdata data[],
+        const double pintParam[15][15][6],const double x[], FF_CubicParam *param,double dTheta_dXi[],double db_dXi[],double dc_dXi[]);
+
 //Calculates Theta,b,delta and epsilon for a mixture, given a cubic EOS,a mixing rule, composition, and pure substance parameters
-EXP_IMP void CALLCONV FF_MixParamCubicEOS(const enum FF_MixingRule *rule,const double *T,const int *numSubs,const  FF_CubicEOSdata data[],
-                                     const double pintParam[],const double x[], FF_CubicParam *param,double dTheta_dXi[],double db_dXi[],double dc_dXi[]);
+EXP_IMP void CALLCONV FF_MixParamTderCubicEOS(const enum FF_MixingRule *rule,const double *T,const int *numSubs,const  FF_CubicEOSdata data[],
+                                     const double pintParam[15][15][6],const double x[], FF_CubicParam *param);
 
 //Calculates Theta,b,dTheta/dT, d2Theta/dT2, dTheta/dX[i] and db/dX[i] for a mixture, given a cubic EOS,a mixing rule, composition, and pure substance parameters
-//---------------------------------------------------------------------------------------------------------------------------------------------------------------
 EXP_IMP void CALLCONV FF_MixParamCubicEOSOld(const enum FF_EOS eos[],const enum FF_MixingRule *rule,const double *T,const int *numSubs,const  FF_CubicEOSdata data[],
         const double pintParam[],const double x[], FF_CubicParam *param,double dTheta_dXi[],double db_dXi[],double dc_dXi[]);
+
+//Calculates Theta,b and c, given a cubic EOS,excess G, composition, and pure substance parameters
+//------------------------------------------------------------------------------------------------
+EXP_IMP void CALLCONV FF_MixParamCubicEOSgE(const FF_MixData *mix,const double *T,const double x[], FF_CubicParam *param);
+
+//Calculates Theta,b,c and their composition derivatives, given a cubic EOS,excess G, composition, and pure substance parameters
+EXP_IMP void CALLCONV FF_MixParamNderCubicEOSgE(const FF_MixData *mix,const double *T,const double x[],FF_CubicParam *param,double dNalpha_dNi[],double dNb_dNi[]);
+
+//Calculates Theta,b,c and their temperature derivatives, given a cubic EOS,excess G, composition, and pure substance parameters
+EXP_IMP void CALLCONV FF_MixParamTderCubicEOSgE(const FF_MixData *mix,const double *T,const double x[], FF_CubicParam *param);
 
 //Calculates Theta,b,delta and epsilon for a mixture, given a cubic EOS,a gE mixing rule, composition,pure substance parameters, and gE
 //EXP_IMP void CALLCONV calcMixParamCubicEOSgE(const enum FF_EOS *eos,const enum FF_MixingRule *rule,const double *T,const int *numSubs,const  FF_CubicParam sParam[],
 //        const double *gE,const double x[], FF_CubicParam *param,double dNb_dNi[]);
 
 
-//Mixture FF_PCSAFT EOS calculation
+//Mixture SAFT EOS calculation
 //------------------------------
 //Mixture Z and Arr calculation for a mixture, given T and V, according to FF_PCSAFT EOS
-EXP_IMP void CALLCONV FF_MixArrZfromTVPCSAFT(const enum FF_MixingRule *rule,const double *T,const double *V,const int *numSubs,
-                                        const  FF_SaftEOSdata data[],const double pintParam[],const double x[],double *Arr,double *Z);
+EXP_IMP void CALLCONV FF_MixArrZfromTVSAFT(const enum FF_MixingRule *rule,const double *T,const double *V,const int *numSubs,
+                                        const  FF_SaftEOSdata data[],const double pintParam[15][15][6],const double x[],double *Arr,double *Z);
 //Mixture P calculation given T, V, and composition according to FF_PCSAFT EOS
-EXP_IMP void CALLCONV FF_MixPfromTVPCSAFT(const enum FF_MixingRule *rule,const double *T,const double *V,const int *numSubs,
-                                        const  FF_SaftEOSdata data[],const double pintParam[],const double x[],double *P);
+EXP_IMP void CALLCONV FF_MixPfromTVSAFT(const enum FF_MixingRule *rule,const double *T,const double *V,const int *numSubs,
+                                        const  FF_SaftEOSdata data[],const double pintParam[15][15][6],const double x[],double *P);
 //Mixture V,Arr and Z  calculation, given T and P and composition, according to FF_PCSAFT EOS
-EXP_IMP void CALLCONV FF_MixVfromTPPCSAFT(const enum FF_MixingRule *rule,const double *T,const double *P,const int *numSubs,const  FF_SaftEOSdata data[],
-                                     const double pintParam[],const double x[],const char *option,double resultL[3],double resultG[3],char *state);
+EXP_IMP void CALLCONV FF_MixVfromTPSAFTOld(const enum FF_MixingRule *rule,const double *T,const double *P,const int *numSubs,const  FF_SaftEOSdata data[],
+                                     const double pintParam[15][15][6],const double x[],const char *option,double resultL[3],double resultG[3],char *state);
+
+//Mixture V,Arr and Z  calculation, given T and P and composition, according to FF_PCSAFT EOS
+EXP_IMP void CALLCONV FF_MixVfromTPSAFT(const enum FF_MixingRule *rule,const double *T,const double *P,const int *numSubs,const  FF_SaftEOSdata data[],
+                                     const double pintParam[15][15][6],const double x[],const char *option,double resultL[3],double resultG[3],char *state);
 //Arr (reduced residual Helmholtz energy) and its partial derivatives calculation for a mixture, given T and V, according to FF_PCSAFT EOS
 //--------------------------------------------------------------------------------------------------------------------------------------------
-EXP_IMP void CALLCONV FF_MixArrDerPCSAFT(const enum FF_MixingRule *rule,const double *T,const double *V,const int *numSubs,
+EXP_IMP void CALLCONV FF_MixArrDerSAFT(const enum FF_MixingRule *rule,const double *T,const double *V,const int *numSubs,
                               const  FF_SaftEOSdata data[],const double pintParam[],const double x[],double result[6]);
 
 //Mixture common calculations
 //---------------------------
 //Mixture P calculation from T and V by eos
-EXP_IMP void CALLCONV FF_MixPfromTVeos(const enum FF_EOS eos[],const enum FF_MixingRule *rule,const double *T,const double *V,const int *numSubs,const void *data,
-                                  const double pintParam[],const double x[],double *P);
+EXP_IMP void CALLCONV FF_MixPfromTVeos(const FF_MixData *mix,const double *T,const double *V,const double x[],double *P);
 //Mixture V calculation from T and P by eos
-EXP_IMP void CALLCONV FF_MixVfromTPeos(const enum FF_EosType *eosType,const enum FF_MixingRule *rule,const double *T,const double *P,const int *numSubs,const void *data,
-                                  const double pintParam[],const double x[],const char *option,double resultL[3],double resultG[3],char *state);
+EXP_IMP void CALLCONV FF_MixVfromTPeos(const FF_MixData *mix,const double *T,const double *P,const double x[],
+                                       const char *option,double resultL[3],double resultG[3],char *state);
 //Mixture Ideal gas thermodynamic properties calculation, from a reference state, specified by T and P, where H and S are 0
-EXP_IMP void CALLCONV FF_MixFF_IdealThermoEOS(const int *numSubs,const  FF_Correlation cp0[],const double x[],double *refT,double *refP, FF_ThermoProperties *th0);
+EXP_IMP void CALLCONV FF_MixIdealThermoEOS(const int *numSubs,const  FF_Correlation cp0[],const double x[],double *refT,double *refP, FF_ThermoProperties *th0);
 
 //Mixture Residual thermodynamic properties calculation from T and V, using EOS
-EXP_IMP void CALLCONV FF_MixResidualThermoEOS(const enum FF_EosType *eosType,const enum FF_MixingRule *rule,const int *numSubs,const void *data,const double pintParam[],
-                                         const double x[], FF_ThermoProperties *thR);
+EXP_IMP void CALLCONV FF_MixResidualThermoEOS(FF_MixData *mix,FF_PhaseThermoProp *thR);
+
 //Mixture thermodynamic properties calculation from T and V, from a reference state (specified by T and P) where H and S are 0
-EXP_IMP void CALLCONV FF_MixThermoEOS(const enum FF_EosType *eosType,const enum FF_MixingRule *rule,const int *numSubs,const void *data,const double pintParam[],
-                                 const double x[],const  FF_Correlation cp0[],double *refT,double *refP, FF_ThermoProperties *th);
+EXP_IMP void CALLCONV FF_MixThermoEOS(FF_MixData *mix,double *refT,double *refP, FF_PhaseThermoProp *th);
+
 //Mixture fugacity coeff. calculation from T and P by eos
-EXP_IMP void CALLCONV FF_MixFugacityEOS(const enum FF_EosType *eosType,const enum FF_MixingRule *rule,const double *T,const double *V,const int *numSubs,const void *data,
-                                        const double pintParam[],const double x[],double phi[]);
-//Mixture bubble temperature calculation, given P, comoposition, eos and mixing rule
-EXP_IMP void CALLCONV FF_BubbleT(const enum FF_EosType *eosType,const enum FF_MixingRule *rule,const double *P,const int *numSubs,const void *data,
-                     const double pintParam[],const double x[],const double *bTguess,double *bT,double y[],double substPhiL[],double substPhiG[]);
-//Mixture dew temperature calculation, given P, comoposition, eos and mixing rule
-EXP_IMP void CALLCONV FF_DewT(const enum FF_EosType *eosType,const enum FF_MixingRule *rule,const double *P,const int *numSubs,const void *data,
-                           const double pintParam[],const double y[],const double *dTguess,double *dT,double x[],double substPhiL[],double substPhiG[]);
-//Mixture bubble pressure calculation, given T, comoposition, eos and mixing rule
-EXP_IMP void CALLCONV FF_BubbleP(const enum FF_EosType *eosType,const enum FF_MixingRule *rule,const double *T,const int *numSubs,const void *data,
-                              const double pintParam[],const double x[],const double *bPguess, double *bP,double y[],double substPhiL[],double substPhiG[]);
-//Mixture dew pressure calculation, given T, comoposition, eos and mixing rule
-EXP_IMP void CALLCONV FF_DewP(const enum FF_EosType *eosType,const enum FF_MixingRule *rule,const double *T,const int *numSubs,const void *data,
-                           const double pintParam[],const double y[],const double *dPguess,double *dP,double x[],double substPhiL[],double substPhiG[]);
-//Pressure envelope of a binary mixture
-EXP_IMP void CALLCONV FF_PressureEnvelope(const enum FF_EosType *eosType,const enum FF_MixingRule *rule,const double *T,const void *data,
-                                  const double pintParam[],const int *numPoints,double c[],double x[],double y[],double bP[],double dP[]);
-//VL flash calculation, given T, P, feed composition, eos and mixing rule
-EXP_IMP void CALLCONV FF_VLflashTP(const enum FF_EOS *eos,const enum FF_MixingRule *rule,const double *T,const double *P,const int *numSubs,const void *data,
-                     const double pintParam[],const double f[],double x[],double y[],double *beta);
+EXP_IMP void CALLCONV FF_MixPhiEOS(const FF_MixData *mix,const double *T,const double *P,const double x[],const char *option,double phi[]);
+
+//Fast Phi computation for a cubic EOS supplying parameters and derivatives
+EXP_IMP void CALLCONV FF_MixPhiEOScubic(const FF_MixData *mix,FF_CubicParam *param,double da_di[],double db_di[],double dc_di[],
+                                     const double *T,const double *P,const double x[],const char *option,double phi[]);
+
 
 #ifdef __cplusplus
 }

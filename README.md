@@ -5,15 +5,17 @@ Cubic EOS:
 Implements the Peng Robinson (PR) and Soave Redlich Kwong (SRK) types, 
 with different theta function calculations, and volume traslation. An special 
 Peng Robinson type (PRFIT4) uses fitted parameters, not related to real Tc and Pc, 
-for a,b,w and Tc, obtaining good results in density,Vp. and Cp calculations. 
-At the moment VdW, and Panagiotopoulos Reid, mixing rules are working. 
-The Mathias Klotz Prausnitz one needs some revision, and gE rules need an update.
- 
-PCSAFT eos:
-Includes association term. Polar PCSAFT is not working properly. 
-CR-1 (Wolbach and Sandler modified) is used as mixing rule for mixtures.
+for a,b,w and Tc, obtaining good results in density,Vp. and Cp calculations.
+For mixtures, VdW, Panagiotopoulos and Reid, and MKP mixing rules are implemented. 
+Also gE mixing rules (HV,MHV1,MHV2,LCVM and UMR) based on activity models.
 
-Multiparameter eos as per Span and Wagner:
+PCSAFT eos:
+Includes PCSAFT with association term. Also Polar PCSAFT with dipolar term, both
+Gross and Vrabeck and Jog and Chapman models. but only the Gross and Vrabeck is implemented for mixtures. 
+CR-1 (Wolbach and Sandler modified) is used as mixing rule for mixtures.
+SAFT VR with Mie potential is also implemented, but only for pure substances.
+
+Multiparameter eos as per Schmidt and Wagner:
 Includes IAWPS95.The ideal gas contribution is implemented,except for IAPWS95, 
 in a non standard way, using ideal gas Cp instead of ideal Helmholtz energy, 
 and using always as reference state that of an ideal gas. No work has been done in mixtures.
