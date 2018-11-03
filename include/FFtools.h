@@ -46,11 +46,6 @@
 #include "FFeosPure.h"
 #include "FFphysprop.h"
 
-enum FF_OptModel{corr,cubicParam,SAFTParam};
-typedef struct {enum FF_CorrEquation eq ;double Tc,Pc,rhoC;unsigned nPoints;double x[40],y[40];}FF_CorrelationData;//The dimension of arrays must be declared in structures
-typedef struct {enum FF_EOS eos ;double MW,Tc,Pc,Zc,w,VdWV,mu,xp,m,chi,ldensFilter,zcFilter,error,vpError,ldensError,zcError;unsigned nPoints;double points[40][3];}FF_EOSPvRhoData;//The dimension of arrays must be declared in structures
-typedef struct{int eosType;FF_SaftEOSdata *eos;double xp,ldensFilter,zcFilter,error,vpError,ldensError,zcError;unsigned nPoints,nVpPoints,nLdPoints;double vpPoints[30][2],ldPoints[30][3];}FF_SAFTFitData;
-typedef struct{int eosType;FF_CubicEOSdata *eos;double ldensFilter,zcFilter,error,vpError,ldensError,zcError;unsigned nPoints;double points[40][3];}FF_CubicFitData;
 #ifdef __cplusplus
 extern "C"
 {
@@ -64,6 +59,11 @@ extern "C"
 EXP_IMP double CALLCONV FF_CorrelationError(unsigned nVar, const double coef[], double grad[], const  FF_CorrelationData *data);
 //Optimizer function for correlations. Recibes: number of variables to optimize, bounds, data to pass to the error calculation function. Returns optimized values and error
 EXP_IMP void CALLCONV FF_OptCorrelation(unsigned nVar,double lb[],double ub[],char enforceLimits[],const  FF_CorrelationData *data,double var[],double *error);
+//Determines the error of a SAFT EOS, using the given coefficients, and the real value supplied inside data
+double CALLCONV FF_SaftFitError(unsigned nVar, const double coef[], double grad[],  FF_SAFTFitData *data);
+//Determines the error of a cubic EOS, using the given coefficients, and the real value supplied inside data
+EXP_IMP double CALLCONV FF_CubicFitError(unsigned nVar, const double coef[], double grad[],  FF_CubicFitData *data);
+
 
 //Determines the error of a  cubic EOS, using the given coefficients, and the real value supplied inside data
 EXP_IMP double CALLCONV FF_CubicPvRhoError(unsigned nVar, const double coef[], double grad[], FF_EOSPvRhoData *data);

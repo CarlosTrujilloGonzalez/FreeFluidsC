@@ -51,7 +51,8 @@
 extern "C"
 {
 #endif
-
+//Calculation of the minimum tangent plane distance and the corresponding composition
+EXP_IMP void CALLCONV FF_StabilityCheck(FF_PTXfeed *data,int *useOptimizer,double *tpd,double tpdX[]);
 
 //Mixture bubble temperature calculation, given P, comoposition, eos and mixing rule
 EXP_IMP void CALLCONV FF_BubbleT(FF_MixData *mix,const double *P,const double x[],const double *bTguess, double *bT,double y[],
@@ -62,7 +63,7 @@ EXP_IMP void CALLCONV FF_DewT(FF_MixData *mix,const double *P, const double y[],
 //Temperature envelope of a binary mixture
 void CALLCONV FF_TemperatureEnvelope(FF_MixData *mix,const double *P, const int *nPoints, double c[],double bT[],double y[],double dT[],double x[]);
 //Mixture bubble pressure calculation, given T, comoposition, eos and mixing rule
-EXP_IMP void CALLCONV FF_BubbleP(FF_MixData *mix,const double *T, const double x[],const double *bPguess, double *bP,
+EXP_IMP void CALLCONV FF_BubbleP(FF_MixData *mix,const double *T, const double c[],const double *bPguess, double *bP,
                                  double y[],double substPhiL[],double substPhiG[]);
 //Mixture dew pressure calculation, given T, comoposition, eos and mixing rule
 EXP_IMP void CALLCONV FF_DewP(FF_MixData *mix,const double *T, const double y[],const double *dPguess, double *dP,double x[],double substPhiL[],double substPhiG[]);
@@ -72,6 +73,11 @@ EXP_IMP void CALLCONV FF_PressureEnvelope(FF_MixData *mix,const double *T, const
 //VL flash calculation, given T, P, feed composition, eos and mixing rule
 EXP_IMP void CALLCONV FF_VLflashPT(FF_MixData *mix,const double *T,const double *P,const double f[],
                                    double x[],double y[],double substPhiL[],double substPhiG[],double *beta);
+//Determines the Gibbs energy of 1 mol of a mix, given T,P,total composition and the part of it assigned to one phase
+EXP_IMP double CALLCONV FF_TwoPhasesGibbs(unsigned nVar, const double coef[], double grad[], FF_PTXfeed *data);
+//VL flash calculation, given T,P, composition, and thermo model to use. By global optimization of residual Gibbs energy
+EXP_IMP void CALLCONV FF_TwoPhasesFlashPTGO(FF_PTXfeed *data, double x[],double y[],double substPhiL[],double substPhiG[],double *beta);
+//void CALLCONV FF_VLflashPTGO();
 
 #ifdef __cplusplus
 }

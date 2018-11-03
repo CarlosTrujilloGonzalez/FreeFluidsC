@@ -58,6 +58,7 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_Subst
     int unifacCompPSRK[*numSubs*10][3];
     int unifacCompDort[*numSubs*10][3];
     int unifacCompNist[*numSubs*10][3];
+    int useUnifacStd=1,useUnifacPSRK=1,useUnifacDort=1,useUnifacNist=1;//Indicates that can be used in the mix. If not, we will put to 0
     /*
     for(i=0;i<*numSubs*10;i++){
         unifacCompStd[i][0]=unifacCompStd[i][1]=unifacCompStd[i][2]=0;
@@ -67,6 +68,7 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_Subst
     mixData->numSubs=*numSubs;
     for (i=0;i<*numSubs;i++){
         mixData->id[i]=subsData[i]->id;
+        strcpy(mixData->subsName[i],subsData[i]->name);
         strncpy(mixData->CAS[i],subsData[i]->CAS,22);
         mixData->baseProp[i]=subsData[i]->baseProp;
         if((mixData->baseProp[i].MWmono>0)&&(mixData->baseProp[i].MW>0)) mixData->baseProp[i].numMono=557;//mixData->baseProp[i].numMono=mixData->baseProp[i].MW/mixData->baseProp[i].MWmono;
@@ -93,6 +95,7 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_Subst
         mixData->unifNistData.model=FF_UNIFACNist;
 
         j=0;
+        if(subsData[i]->UnifStdSubg[j][1]<=0) useUnifacStd=0;
         while(subsData[i]->UnifStdSubg[j][1]>0){//Put the subgroups description of all substances in a single array
             unifacCompStd[k][0]=i;
             unifacCompStd[k][1]=subsData[i]->UnifStdSubg[j][0];
@@ -103,6 +106,7 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_Subst
             k++;
         }
         j=0;
+        if(subsData[i]->UnifPSRKSubg[j][1]<=0) useUnifacPSRK=0;
         while(subsData[i]->UnifPSRKSubg[j][1]>0){//Put the subgroups description of all substances in a single array
             unifacCompPSRK[l][0]=i;
             unifacCompPSRK[l][1]=subsData[i]->UnifPSRKSubg[j][0];
@@ -113,6 +117,7 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_Subst
             l++;
         }
         j=0;
+        if(subsData[i]->UnifDortSubg[j][0]<=0) useUnifacDort=0;
         while(subsData[i]->UnifDortSubg[j][0]>0){
             unifacCompDort[m][0]=i;
             unifacCompDort[m][1]=subsData[i]->UnifDortSubg[j][0];
@@ -123,6 +128,7 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_Subst
             m++;
         }
         j=0;
+        if(subsData[i]->UnifNistSubg[j][0]<=0)useUnifacNist=0;
         while(subsData[i]->UnifNistSubg[j][0]>0){
             unifacCompNist[n][0]=i;
             unifacCompNist[n][1]=subsData[i]->UnifNistSubg[j][0];
@@ -134,10 +140,10 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_Subst
         }
     }
     //printf(" %i %i %i %i\n",k,unifacCompStd[k][0],unifacCompStd[k][1],unifacCompStd[k][2]);
-    FF_UNIFACParams(k,unifacCompStd,&mixData->unifStdData);
-    FF_UNIFACParams(l,unifacCompPSRK,&mixData->unifPSRKData);
-    FF_UNIFACParams(m,unifacCompDort,&mixData->unifDortData);
-    FF_UNIFACParams(n,unifacCompNist,&mixData->unifNistData);
+    if(useUnifacStd==1) FF_UNIFACParams(k,unifacCompStd,&mixData->unifStdData);
+    if(useUnifacPSRK==1) FF_UNIFACParams(l,unifacCompPSRK,&mixData->unifPSRKData);
+    if(useUnifacDort==1) FF_UNIFACParams(m,unifacCompDort,&mixData->unifDortData);
+    if(useUnifacNist==1) FF_UNIFACParams(n,unifacCompNist,&mixData->unifNistData);
     return mixData;
 
 }
@@ -150,6 +156,7 @@ EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int *numSubs,FF_SubstanceData *
     int unifacCompPSRK[*numSubs*10][3];
     int unifacCompDort[*numSubs*10][3];
     int unifacCompNist[*numSubs*10][3];
+    int useUnifacStd=1,useUnifacPSRK=1,useUnifacDort=1,useUnifacNist=1;//Indicates that can be used in the mix. If not, we will put to 0
     for(i=0;i<*numSubs*10;i++){
         unifacCompStd[i][0]=unifacCompStd[i][1]=unifacCompStd[i][2]=0;
     }
@@ -164,7 +171,7 @@ EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int *numSubs,FF_SubstanceData *
 
     for (i=0;i<*numSubs;i++){
         mixData->id[i]=subsData[i]->id;
-
+        strcpy(mixData->subsName[i],subsData[i]->name);
         mixData->baseProp[i]=subsData[i]->baseProp;
         if((mixData->baseProp[i].MWmono>0)&&(mixData->baseProp[i].MW>0)) mixData->baseProp[i].numMono=557;//mixData->baseProp[i].numMono=mixData->baseProp[i].MW/mixData->baseProp[i].MWmono;
         else mixData->baseProp[i].numMono=1;
@@ -192,6 +199,7 @@ EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int *numSubs,FF_SubstanceData *
         mixData->unifNistData.model=FF_UNIFACNist;
 
         j=0;
+        if(subsData[i]->UnifStdSubg[j][1]<=0) useUnifacStd=0;
         while(subsData[i]->UnifStdSubg[j][1]>0){//Put the subgroups description of all substances in a single array
             unifacCompStd[k][0]=i;
             unifacCompStd[k][1]=subsData[i]->UnifStdSubg[j][0];
@@ -203,7 +211,8 @@ EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int *numSubs,FF_SubstanceData *
         }
 
         j=0;
-        while(subsData[i]->UnifPSRKSubg[j][1]>0){//Put the subgroups description of all substances in a single array
+        if(subsData[i]->UnifPSRKSubg[j][1]<=0) useUnifacPSRK=0;
+        while(subsData[i]->UnifPSRKSubg[j][1]>0){
             unifacCompPSRK[l][0]=i;
             unifacCompPSRK[l][1]=subsData[i]->UnifPSRKSubg[j][0];
             if(mixData->baseProp[i].MWmono>1) unifacCompPSRK[l][2]=mixData->baseProp[i].numMono*subsData[i]->UnifPSRKSubg[j][1];
@@ -213,6 +222,7 @@ EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int *numSubs,FF_SubstanceData *
             l++;
         }
         j=0;
+        if(subsData[i]->UnifDortSubg[j][0]<=0) useUnifacDort=0;
         while(subsData[i]->UnifDortSubg[j][0]>0){
             unifacCompDort[m][0]=i;
             unifacCompDort[m][1]=subsData[i]->UnifDortSubg[j][0];
@@ -224,6 +234,7 @@ EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int *numSubs,FF_SubstanceData *
         }
 
         j=0;
+        if(subsData[i]->UnifNistSubg[j][0]<=0)useUnifacNist=0;
         while(subsData[i]->UnifNistSubg[j][0]>0){
             unifacCompNist[n][0]=i;
             unifacCompNist[n][1]=subsData[i]->UnifNistSubg[j][0];
@@ -237,10 +248,10 @@ EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int *numSubs,FF_SubstanceData *
 
     //printf(" %i %i %i %i\n",k,unifacCompStd[k][0],unifacCompStd[k][1],unifacCompStd[k][2]);
 
-    FF_UNIFACParams(k,unifacCompStd,&mixData->unifStdData);
-    FF_UNIFACParams(l,unifacCompPSRK,&mixData->unifPSRKData);
-    FF_UNIFACParams(m,unifacCompDort,&mixData->unifDortData);
-    FF_UNIFACParams(n,unifacCompNist,&mixData->unifNistData);
+    if(useUnifacStd==1)FF_UNIFACParams(k,unifacCompStd,&mixData->unifStdData);
+    if(useUnifacPSRK==1)FF_UNIFACParams(l,unifacCompPSRK,&mixData->unifPSRKData);
+    if(useUnifacDort==1)FF_UNIFACParams(m,unifacCompDort,&mixData->unifDortData);
+    if(useUnifacNist==1)FF_UNIFACParams(n,unifacCompNist,&mixData->unifNistData);
 
 }
 
@@ -2302,7 +2313,7 @@ void CALLCONV FF_MixIdealThermoEOS(const int *numSubs,const  FF_Correlation cp0[
         FF_IdealThermoEOS(&cp0[i].form,cp0[i].coef,refT,refP,&th0S);
         th0->Cp=th0->Cp+x[i]*th0S.Cp;
         th0->H=th0->H+x[i]*th0S.H;
-        th0->S=th0->S+x[i]*th0S.S;
+        th0->S=th0->S+x[i]*(th0S.S-log(x[i]));
     }
     th0->Cv=th0->Cp-R;
     th0->U=th0->H-R*(th0->T- *refT);//We need to substrat the integration of d(P*V)=d(R*T)=R*dT from reference T to actual T

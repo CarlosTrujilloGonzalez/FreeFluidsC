@@ -54,6 +54,8 @@ extern const double R; //Pa·m3/(K·mol)
 extern const double FF_PCSAFTap[7][3];
 extern const double FF_PCSAFTbp[7][3];
 
+//Enumerations
+//------------
 enum FF_EosType{FF_NoType,FF_IdealType,FF_CubicType,FF_CubicPRtype,FF_CubicSRKtype,FF_SAFTtype,FF_SWtype};
 enum FF_EOS{FF_IdealGas,FF_PR76,FF_PR78,FF_PRSV1,FF_PRBM,FF_PRMELHEM,FF_PRSOF,FF_PRALMEIDA,FF_PRMC,FF_PRTWU91,FF_PRvTWU91,FF_PRTWU95,FF_PRPOL1,FF_PRFIT3,FF_PRFIT4,FF_PRFIT4B,
             FF_SRK,FF_SRKSOF,FF_SRKMC,FF_SRKTWU91,FF_SRKPOL2,
@@ -69,6 +71,7 @@ enum FF_CorrEquation{FF_DIPPR100,FF_Polynomial,FF_Polynomial2,FF_DIPPR100Ld,FF_e
 
 enum FF_ActModel{FF_NoModel,FF_Wilson,FF_NRTL,FF_UNIQUAC,FF_UNIQUACFV,FF_UNIFACStd,FF_UNIFACPSRK,FF_UNIFACDort,FF_UNIFACNist,FF_EntropicFV,FF_UNIFACZM,
                  FF_Hildebrand,FF_Hansen,FF_Chi};
+//Enumeration for binary interaction parameter calculation formulas
 enum FF_IntParamForm{FF_NoForm,FF_Pol1,FF_Pol1K,FF_Pol1J,FF_Pol1C,FF_Pol2,FF_Pol2K,FF_Pol2J,FF_Pol2C,FF_Pol3,FF_Pol3K,FF_Pol3J,FF_Pol3C,FF_Ant1,FF_Ant2,FF_Ant3};
 //FF_Pol1 corresponds to:a+b*T+c*T^2
 //FF_Pol2: a+b*T+c/T^2
@@ -77,47 +80,65 @@ enum FF_IntParamForm{FF_NoForm,FF_Pol1,FF_Pol1K,FF_Pol1J,FF_Pol1C,FF_Pol2,FF_Pol
 //FF_Ant2: a+b/T+c*ln(T)+d*T+e*T^2
 //FF_Ant3: a+b/T+c*ln(T)+d*T+e/T^2.
 //In case the result contains energy, K,J,C indicates if the energy is expresed in K, Joules o Calories
+//Enumeration for units used in Flory-Huggins model
 enum FF_Units{FF_cal_cm3_05,FF_MPa_05};
-
+//Structures
+//----------
+//Basic properties for pure or pseudopure substances
 typedef struct {int id,type,numMono,unifacPSRKSubg[10][2],unifacDortSubg[10][2];double MW,MWmono,Tc,Pc,Vc,Zc,w,Zra,r,q,qRes,VdWV,Vliq,FV,mu,Q,Tb,Hildebrand,
                 HansenD,HansenP,HansenH;}FF_BaseProp;
+//Data for cubic EOS. Critical properties used are reported in order to better fix the EOS
 typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,VdWV,c,k1,k2,k3,k4;}FF_CubicEOSdata;
+//Cubic EOS parameters once given composition and T
 typedef struct {double a,Theta,b,c,u,w,dTheta,d2Theta;}FF_CubicParam;
+//Data for SAFT type EOS. Critical properties used are reported in order to better fix the EOS
 typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,sigma,m,epsilon,lr,la,chi,kAB,epsilonAB,mu,xp,Q;int nPos,nNeg,nAcid;}FF_SaftEOSdata;
-typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,tRef,rhoRef,n[24],t[24];int d[24],c[24],nPol,nExp;}SWSEOSdata;
+//Data for Schmidt-Wagner type EOS
 typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,tRef,rhoRef,n[60],t[60],a[8],e[8],b[8],g[8],af[5],bf[5],
                 Af[5],Bf[5],Cf[5],Df[5],betaf[5];int d[60],c[55],nPol,nExp,nSpec,nFinal;}FF_SWEOSdata;
+//Data for physical properties correlation formulas
 typedef struct {int id,form;double coef[14],limI,limS;}FF_Correlation;
+//Data for single physical property
 typedef struct {double x,y;}FF_SinglePointData;
-typedef struct {int id,model,UnifStdSubg[20][2],UnifPSRKSubg[20][2],UnifDortSubg[20][2],UnifNistSubg[20][2];double refT,refP;FF_BaseProp baseProp;
-                FF_SinglePointData cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,gVisc,gThC,sDens,sCp;FF_CubicEOSdata cubicData;FF_SaftEOSdata saftData;
-                FF_SWEOSdata swData;FF_Correlation cp0Corr,vpCorr,btCorr,hVsatCorr,lCpCorr,lDensCorr,lViscCorr,lThCCorr,lSurfTCorr,
-                gDensCorr,gViscCorr,gThCCorr,sDensCorr,sCpCorr;}FF_SubstanceDataOld;
 
+//Data for a pure substance, including substructures for basic data, EOS and physical properties
 typedef struct {char name[30],CAS[22],description[150];int id,model,UnifStdSubg[20][2],UnifPSRKSubg[20][2],UnifDortSubg[20][2],UnifNistSubg[20][2];
                 double refT,refP;FF_BaseProp baseProp;FF_SinglePointData cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,gVisc,gThC,sDens,sCp;
                 FF_CubicEOSdata cubicData;FF_SaftEOSdata saftData;FF_SWEOSdata swData;FF_Correlation cp0Corr,vpCorr,btCorr,hVsatCorr,lCpCorr,
                 lDensCorr,lViscCorr,lThCCorr,lSurfTCorr, gDensCorr,gViscCorr,gThCCorr,sDensCorr,sCpCorr;}FF_SubstanceData;
 
+//UNIFAC data for a mixture. Used to speed-up calculations
 //Prepared for 20 substances and 30 subgroups. FV must be filled with the free volume of each substance if EntropicFV model is to be used
 //subgroups:List of subgroups with its groups.
-typedef struct {int model,numSubs,numSubg,subgroup[30][2],subsSubg[20][30];double subgData[30][2], subgInt[30][30][3],subsR[20],subsQ[20],FV[20];}FF_UnifacData;
+typedef struct {int model,numSubs,numSubg,subgroup[30][2],subsSubg[20][30];double subgData[30][2], subgInt[30][30][3],subsR[20],subsQ[20],
+                FV[20];}FF_UnifacData;
+//Flory-Huggins data for a binary mixture. alternatives for using Hildebrand,Hansen, or Chi
 typedef struct {enum FF_ActModel model;enum FF_IntParamForm formula;enum FF_Units units;double deltaHil[2],deltaHan[2][3],chiData[3],V[2];}FF_FloryData;
+//Activity data for a single substance
 typedef struct{double lnGammaC,lnGammaSG,lnGammaR,gamma,dgEC,dgESG,dgER;}FF_SubsActivityData;
 typedef struct{double gEC,gESG,gER,gE,dgE_dT;}FF_ExcessData;
+//Thermodynamic model for a mixture. Not used till now
 typedef struct{int numSubs,thModelActEos,actModel,refVpEos,eosType,mixRule;}FF_ThermoModel;
-
+//Data for a mixture. Includes as arrays(fixed to 15 substances) the substances data, plus definition of the thermo model to use. BIP ar not included
+//as they would change depending on the model choosen for calculations(activity/eos) and the EOS selected
 //thModelActEos=0 indicates that and activity model is used for the liquid phase and that the BIP will be for this activity model. =1 indicates EOS
-typedef struct {char name[30],CAS[15][22],description[150];int model,numSubs,thModelActEos,actModel,refVpEos,eosType,mixRule,intForm,id[15];
+typedef struct {char name[30],description[150],subsName[15][30],CAS[15][22];int model,numSubs,thModelActEos,actModel,refVpEos,eosType,mixRule,intForm,id[15];
                 double refT,refP,intParam[15][15][6];FF_BaseProp baseProp[15];FF_UnifacData unifStdData,
                 unifPSRKData,unifDortData,unifNistData;FF_SinglePointData cp0[15],vp[15],hVsat[15],lCp[15],lDens[15],lVisc[15],lThC[15],lSurfT[15],
                 gVisc[15],gThC[15],sDens[15],sCp[15];FF_CubicEOSdata cubicData[15];FF_SaftEOSdata saftData[15];FF_SWEOSdata swData[15];
                 FF_Correlation cp0Corr[15],vpCorr[15],btCorr[15],hVsatCorr[15],lCpCorr[15],lDensCorr[15],lViscCorr[15],lThCCorr[15],lSurfTCorr[15],
                 gDensCorr[15],gViscCorr[15],gThCCorr[15],sDensCorr[15],sCpCorr[15];}FF_MixData;
-
+//Thermodynamic properties records
 typedef struct {double MW,T,P,V,A,G,S,U,H,dP_dT,dP_dV,Cv,Cp,SS,JT,IT;}FF_ThermoProperties;//smaller record mainly for ideal gas calculations
 typedef struct {double fraction,MW,T,P,V,A,G,S,U,H,dP_dT,dP_dV,Cv,Cp,SS,JT,IT,ArrDer[6],c[15],subsPhi[15];}FF_PhaseThermoProp;//fraction stands for (phase moles)/(total mix moles)
 typedef struct {double MW,T,P;FF_PhaseThermoProp phase[4];}FF_MixThermoProp;
 typedef struct {double uE,hE,gE;}ExcessProp;
+//Data for a defined composition,T and P, with log of fugacity/pressure as an aid to speed up calculations , if needed
+typedef struct {FF_MixData *mix;double T,P,z[15],logSubstFugacity[15];}FF_PTXfeed;
+
+typedef struct {enum FF_CorrEquation eq ;double Tc,Pc,rhoC;unsigned nPoints;double x[40],y[40];}FF_CorrelationData;//The dimension of arrays must be declared in structures
+typedef struct {enum FF_EOS eos ;double MW,Tc,Pc,Zc,w,VdWV,mu,xp,m,chi,ldensFilter,zcFilter,error,vpError,ldensError,zcError;unsigned nPoints;double points[40][3];}FF_EOSPvRhoData;//The dimension of arrays must be declared in structures
+typedef struct{int eosType;FF_SaftEOSdata *eos;double xp,ldensFilter,zcFilter,error,vpError,ldensError,zcError;unsigned nPoints,nVpPoints,nLdPoints;double vpPoints[30][2],ldPoints[30][3];}FF_SAFTFitData;
+typedef struct{int eosType;FF_CubicEOSdata *eos;double ldensFilter,zcFilter,error,vpError,ldensError,zcError;unsigned nPoints;double points[40][3];}FF_CubicFitData;
 
 #endif /* FFBASIC_H */

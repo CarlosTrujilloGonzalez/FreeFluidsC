@@ -320,6 +320,8 @@ void CALLCONV FF_OptCorrelation(unsigned nVar,double lb[],double ub[],char enfor
     nlopt_set_maxtime(opt,20.0);//time in seconds
     nlopt_set_min_objective(opt,FF_CorrelationError , data);
     int code=nlopt_optimize(opt, var, error);
+    nlopt_destroy(optL);
+    nlopt_destroy(opt);
     if (*error>0.1){
         nlopt_set_maxtime(opt,5.0);//time in seconds
         //We change de default values for bounds and local algorithm
@@ -704,6 +706,8 @@ void CALLCONV FF_OptSAFTparam(unsigned optTime,unsigned nVar,double lb[],double 
     nlopt_set_maxtime(opt,optTime);//Max.time in seconds
     nlopt_set_min_objective(opt, FF_SaftFitError, data);
     int code=nlopt_optimize(opt, var, error);
+    nlopt_destroy(optL);
+    nlopt_destroy(opt);
     printf("Return code:%i\n",code);
     if (code < 0){
         printf("nlopt failed!\n");
@@ -883,93 +887,6 @@ void CALLCONV FF_OptCubicParam(unsigned optTime,unsigned nVar,double lb[],double
         var[2]=1.6;
         //var[3]=0;
         break;
-    case FF_PCSAFT://use directly Nelder-Mead algorithm
-    case FF_PPCSAFT_GV:
-    case FF_PPCSAFT_JC:
-        nVar=3;
-        lb[0]=2.0;
-        ub[0]=4.1;
-        lb[1]=1;
-        ub[1]=5;
-        lb[2]=150;
-        ub[2]=350;
-        var[0]=2.5;
-        var[1]=1;
-        var[2]=350;
-        break;
-    case FF_PCSAFT1A://PCSAFT 1A assoc. schema Use MLSL_LDS plus Nealder-Mead
-        nVar=5;
-        lb[0]=2.0;
-        ub[0]=4.1;
-        lb[1]=1;
-        ub[1]=5;
-        lb[2]=150;
-        ub[2]=350;
-        lb[3]=0.001;
-        ub[3]=0.5;
-        lb[4]=1000;
-        ub[4]=5000;
-        var[0]=3;
-        var[1]=1.5;
-        var[2]=250;
-        var[3]=0.001;
-        var[4]=2300;
-        break;
-    case FF_PCSAFT2B://Use MLSL_LDS plus Nealder-Mead
-    case FF_PPCSAFT2B_GV:
-    case FF_PPCSAFT2B_JC:
-        nVar=5;
-        lb[0]=2.0;
-        ub[0]=4.1;
-        lb[1]=1;
-        ub[1]=5;
-        lb[2]=150;
-        ub[2]=350;
-        lb[3]=0.005;
-        ub[3]=0.5;
-        lb[4]=1000;
-        ub[4]=3000;
-        var[0]=3;
-        var[1]=1.5;
-        var[2]=250;
-        var[3]=0.02;
-        var[4]=2300;
-        break;
-    case FF_PCSAFT4C://Use MLSL_LDS plus Nealder-Mead
-        nVar=5;
-        lb[0]=2.0;
-        ub[0]=4.1;
-        lb[1]=1;
-        ub[1]=5;
-        lb[2]=100;
-        ub[2]=400;
-        lb[3]=0.005;
-        ub[3]=0.5;
-        lb[4]=1000;
-        ub[4]=3200;
-        var[0]=2.0;
-        var[1]=3.5;
-        var[2]=300.0;
-        var[3]=0.02;
-        var[4]=2300;
-        break;
-    case FF_SAFTVRMie:
-        nVar=6;
-        lb[0]=1.5;
-        ub[0]=6;
-        lb[1]=1;
-        ub[1]=6;
-        lb[2]=130;
-        ub[2]=500;
-        var[0]=2.5;
-        var[1]=1;
-        var[2]=350;
-        var[3]=lb[3]=ub[3]=0;
-        var[4]=lb[4]=ub[4]=0;
-        lb[5]=8;
-        ub[5]=20;
-        var[5]=12;
-        break;
     }
 
     for (i=0;i<nVar;i++){//we recover the received values for limits and initial value,if needed
@@ -996,6 +913,8 @@ void CALLCONV FF_OptCubicParam(unsigned optTime,unsigned nVar,double lb[],double
     //nlopt_add_inequality_constraint(opt,FF_CubicEOSAlphaConstraint,data,1e-2);//this makes that the calculated alpha is not too different from PR or FF_SRK original alpha
 
     int code=nlopt_optimize(opt, var, error);
+    nlopt_destroy(optL);
+    nlopt_destroy(opt);
     printf("Return code:%i\n",code);
     if (code < 0){
         printf("nlopt failed!\n");
