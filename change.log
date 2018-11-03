@@ -1,0 +1,6 @@
+Version 1.1
+- All structures are now defined in the "FFbasic.h" file.
+- Stability check by Michelsen, and global optimizer, methodologies added.
+- Two phases flash, according to Michelsen methodology improved.
+- Two phases flash by global optimizer added.
+- Code cleaning and bugs correction.

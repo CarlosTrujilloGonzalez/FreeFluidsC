@@ -26,10 +26,161 @@
 //===============================================
 #include <math.h>
 #include <stdio.h>
+#include <nlopt.h>
 #include "FFbasic.h"
 #include "FFeosPure.h"
 #include "FFeosMix.h"
 #include "FFequilibrium.h"
+
+#include "FFtools.h"
+
+//Calculation of the tangent plane distance for a test composition,regarding a base one. data.z in mol fraction and coef in mole number
+double CALLCONV FF_TPD(unsigned nVar, const double coef[], double grad[], FF_PTXfeed *data){
+    int i,equal;
+    double xTotal,x[nVar],y[nVar],answerL[3],answerG[3];
+    double substPhi[nVar],tpd;
+    char option,state;
+    xTotal=0;
+    for(i=0;i<nVar;i++) xTotal=xTotal+coef[i];//count of the number of moles
+    equal=1;
+    for(i=0;i<nVar;i++){//We convert the mole number to fraction
+        x[i]=coef[i]/xTotal;//Normalization of the test phase
+        if(fabs(x[i]-data->z[i])>0.001) equal=0;//Detect that the two phases are of different composition
+    }
+    if(equal==1) return 1e5;
+    else{
+        option='s';
+        FF_MixVfromTPeos(data->mix,&data->T,&data->P,x,&option,answerL,answerG,&state);
+        //printf("state:%c\n",state);
+        if((state=='L')||(state=='l')||(state=='U')||(state=='u')) option='l';
+        else if((state=='G')||(state=='g')) option='g';
+        else return +HUGE_VALF;
+        FF_MixPhiEOS(data->mix,&data->T,&data->P,x,&option,substPhi);
+        tpd=0;
+        for(i=0;i<nVar;i++) tpd=tpd+x[i]*(log(x[i]*substPhi[i])-data->logSubstFugacity[i]);
+        //for(i=0;i<nVar;i++) printf("Testing x[%i]:%f tpd:%f\n",i,x[i],tpd);
+        return tpd;
+    }
+}
+
+//Calculation of the minimum tangent plane distance and the corresponding composition
+void CALLCONV FF_StabilityCheck(FF_PTXfeed *data,int *useOptimizer,double *tpd,double tpdX[]){
+    unsigned nVar;//number of components
+    char option,state;
+    nVar=data->mix->numSubs;
+    double answerL[3],answerG[3],substPhi[nVar],xTotal;
+    //printf("nVar:%i\n",nVar);
+    int i,code;
+
+    //Calculation of the reference Gibbs energy
+    option='s';
+    FF_MixVfromTPeos(data->mix,&data->T,&data->P,data->z,&option,answerL,answerG,&state);
+    //printf("state:%c\n",state);
+    //printf("Vl:%f Vg:%f\n",answerL[0],answerG[0]);
+    if((state=='L')||(state=='l')||(state=='U')||(state=='u')) option='l';
+    else if((state=='G')||(state=='g')) option='g';
+    else return;
+    FF_MixPhiEOS(data->mix,&data->T,&data->P,data->z,&option,substPhi);
+    for(i=0;i<nVar;i++) data->logSubstFugacity[i]=log(data->z[i]*substPhi[i]);
+    //optimization creation if this alternative is used
+    if(*useOptimizer>0){
+        double optTime;//max optimization time
+        int nEval;//max number of evaluations
+        double lb[nVar],ub[nVar],var[nVar],error;
+        for (i=0;i<nVar;i++){//limits and initial value for the liquid mole numbers
+            lb[i]=0.0;
+            ub[i]=1.0;
+            var[i]=0.5;
+        }
+        nlopt_algorithm alg,algL;
+        nlopt_opt opt,optL;
+        optTime=10;
+        nEval=(nVar-1)*(nVar-1)*400;
+        alg=NLOPT_GN_MLSL_LDS;
+        algL=NLOPT_LN_NELDERMEAD;
+        opt=nlopt_create(alg,nVar);
+        optL=nlopt_create(algL,nVar);
+        nlopt_set_ftol_rel(optL, 1e-10);
+        nlopt_set_xtol_rel(optL, 1e-5);
+        nlopt_set_local_optimizer(opt, optL);
+        nlopt_set_lower_bounds(opt, lb);
+        nlopt_set_upper_bounds(opt, ub);
+        nlopt_set_maxeval(opt,nEval);//number of evaluations
+        nlopt_set_maxtime(opt,optTime);//Max.time in seconds
+        nlopt_set_min_objective(opt,FF_TPD,data);
+        code=nlopt_optimize(opt, var, &error);
+        nlopt_destroy(optL);
+        nlopt_destroy(opt);
+        printf("Return code:%i\n",code);
+        if (code < 0){
+            printf("nlopt failed!\n");
+        }
+        else{
+            *tpd=error;
+            for(i=0;i<nVar;i++) xTotal=xTotal+var[i];//count of the number of moles
+            for(i=0;i<nVar;i++) tpdX[i]=var[i]/xTotal;//Normalization of the test phase
+            printf("found minimum at f(%g,%g) = %0.15g\n", tpdX[0], tpdX[1], *tpd);
+        }
+    }
+    //Limited search of the minimum TPD, starting with k values from Wilson equation
+    else{
+        double k[nVar],xTest[nVar],substPhiTest[nVar],testTPD;
+        int j;
+        *tpd=+HUGE_VALF;
+        //four loops of k calculation starting with original composition as gas phase
+        for(j=0;j<8;j++){
+            xTotal=0;
+            for (i=0;i<nVar;i++){
+                if(j==0){
+                    k[i]=exp(log(data->mix->baseProp[i].Pc/ data->P)+5.373*(1-data->mix->baseProp[i].w)*(1-data->mix->baseProp[i].Tc/ data->T));
+                    xTest[i]=data->z[i]/k[i];
+                }
+                else{
+                    xTest[i]=data->z[i]*substPhi[i]/substPhiTest[i];
+                }
+                xTotal=xTotal+xTest[i];
+            }
+            for(i=0;i<nVar;i++)xTest[i]=xTest[i]/xTotal;//normalization of xTest[i]
+            option='s';
+            FF_MixVfromTPeos(data->mix,&data->T,&data->P,xTest,&option,answerL,answerG,&state);
+            if((state=='L')||(state=='l')||(state=='U')||(state=='u')) option='l';
+            else if((state=='G')||(state=='g')) option='g';
+            FF_MixPhiEOS(data->mix,&data->T,&data->P,xTest,&option,substPhiTest);
+            testTPD=0;
+            for(i=0;i<nVar;i++) testTPD=testTPD+xTest[i]*(log(xTest[i]*substPhiTest[i])-data->logSubstFugacity[i]);
+            if(testTPD<*tpd){
+                *tpd=testTPD;
+                for(i=0;i<nVar;i++)tpdX[i]=xTest[i];
+            }
+        }
+        //Now another four loops as liquid phase
+        for(j=0;j<8;j++){
+            xTotal=0;
+            for (i=0;i<nVar;i++){
+                if(j==0){
+                    k[i]=exp(log(data->mix->baseProp[i].Pc/ data->P)+5.373*(1-data->mix->baseProp[i].w)*(1-data->mix->baseProp[i].Tc/ data->T));
+                    xTest[i]=data->z[i]*k[i];
+                }
+                else{
+                    xTest[i]=data->z[i]*substPhi[i]/substPhiTest[i];
+                }
+                xTotal=xTotal+xTest[i];
+            }
+            for(i=0;i<nVar;i++)xTest[i]=xTest[i]/xTotal;//normalization of xTest[i]
+            option='s';
+            FF_MixVfromTPeos(data->mix,&data->T,&data->P,xTest,&option,answerL,answerG,&state);
+            if((state=='L')||(state=='l')||(state=='U')||(state=='u')) option='l';
+            else if((state=='G')||(state=='g')) option='g';
+            FF_MixPhiEOS(data->mix,&data->T,&data->P,xTest,&option,substPhiTest);
+            testTPD=0;
+            for(i=0;i<nVar;i++) testTPD=testTPD+xTest[i]*(log(xTest[i]*substPhiTest[i])-data->logSubstFugacity[i]);
+            if(testTPD<*tpd){
+                *tpd=testTPD;
+                for(i=0;i<nVar;i++)tpdX[i]=xTest[i];
+            }
+        }
+    }
+}
 
 //Solves the Rachford-Rice equation from an initial k value. Returns phases concentrations, fugacity coefficients and gas fraction
 void CALLCONV FF_RachfordRiceSolver(FF_MixData *mix,const double *T,const double *P,const double f[],const double kInit[],int *numRep,
@@ -49,11 +200,11 @@ void CALLCONV FF_RachfordRiceSolver(FF_MixData *mix,const double *T,const double
         xTotal=0;
         yTotal=0;
         for (i=0;i<mix->numSubs;i++){
-            printf("k[%i]: %f\n",i,k[i]);
+            //printf("k[%i]: %f\n",i,k[i]);
             y[i]=f[i]*k[i];
             yTotal=yTotal+y[i];
         }
-        printf("yTotal: %f\n",yTotal);
+        //printf("yTotal: %f\n",yTotal);
         if(yTotal<=1){//Probably the mixture is at or below the bubble temperature
             for(i=0;i<mix->numSubs;i++){
                 x[i]=f[i];
@@ -66,7 +217,7 @@ void CALLCONV FF_RachfordRiceSolver(FF_MixData *mix,const double *T,const double
                 x[i]=f[i]/k[i];
                 xTotal=xTotal+x[i];
             }
-            printf("xTotal: %f\n",xTotal);
+            //printf("xTotal: %f\n",xTotal);
             if(xTotal<=1){//probably the mixture is over the dew temperature
                 for(i=0;i<mix->numSubs;i++){
                     y[i]=f[i];
@@ -87,7 +238,7 @@ void CALLCONV FF_RachfordRiceSolver(FF_MixData *mix,const double *T,const double
                     *a=(xmin*fxmax-xmax*fxmin)/(fxmax-fxmin);//This is the regula falsi method, Anderson-Bjork modified
                     fa=0;
                     for(i=0;i<mix->numSubs;i++) fa=fa+f[i]*((k[i]-1)/(1-*a*(1-k[i])));//Rachford-Rice equation
-                    printf("n:%i a:%f fa;%f\n",n,*a,fa);
+                    //printf("n:%i a:%f fa;%f\n",n,*a,fa);
                     //y=(*f)(*x);
                     if ((fa<0.001)&&(fa>-0.001)) break;//if we have arrived to the solution exit
                     if ((fxmax * fa)>0){//if the proposed solution is of the same sign than f(xmax)
@@ -109,7 +260,7 @@ void CALLCONV FF_RachfordRiceSolver(FF_MixData *mix,const double *T,const double
                         side = 1;
                     }
                 }
-                printf("j:%i Gas fraction:%f Sumatory:%f side:%i\n",j,*a,fa,side);
+                //printf("j:%i Gas fraction:%f Sumatory:%f side:%i\n",j,*a,fa,side);
                 //Now that we have the gas fraction we calculate the composition of the phases
                 for(i=0;i<mix->numSubs;i++){
                     x[i]=f[i]/(1+*a*(k[i]-1));
@@ -134,42 +285,6 @@ void CALLCONV FF_RachfordRiceSolver(FF_MixData *mix,const double *T,const double
         for(i=0;i<mix->numSubs;i++) k[i]=substPhiL[i]/substPhiG[i];
         if((*a>0)&&(*a<1)&&(fabs(aPrev- *a)<0.0001)) break;
         else aPrev= *a;
-    }
-}
-
-
-void CALLCONV FF_RachfordRiceSolver2(int *numSubs,double f[],double k[],double *a){
-    int i,n,side=0;
-    double xmin=0,xmax=1,fxmin,fxmax,fa;
-    fxmin=-1;//this must be negative
-    fxmax=1;//this must be positive
-    fa=1;
-    n=0;
-    while ((n<20)&&(fabs(fa)>0.001)){//we begin to seek for the root
-        n=n+1;
-        *a=(xmin*fxmax-xmax*fxmin)/(fxmax-fxmin);//This is the regula falsi method, Anderson-Bjork modified
-        fa=0;
-        for(i=0;i< *numSubs;i++) fa=fa+f[i]*((k[i]-1)/(1- *a*(1-k[i])));//Rachford-Rice equation
-        //y=(*f)(*x);
-        if ((fa<0.001)&&(fa>-0.001)) break;//if we have arrived to the solution exit
-        if ((fxmax * fa)>0){//if the proposed solution is of the same sign than f(xmax)
-            if (side==-1){//if it happened also in the previous loop
-                if ((1-fa/fxmax)>0) fxmin *= (1-fa/fxmax);//we decrease f(xmin) for the next loop calculation
-                else fxmin *= 0.5;
-            }
-            xmax=*a;
-            fxmax=fa;
-            side = -1;//we register than the solution was of the same sign than previous xmax
-        }
-        else{//If the prosed solution is of the same sign than f(xmin) we apply the same technic
-            if (side==1){
-                if ((1-fa/fxmin)>0) fxmax *= (1-fa/fxmin);
-                else fxmax *= 0.5;
-            }
-            xmin=*a;
-            fxmin=fa;
-            side = 1;
-        }
     }
 }
 
@@ -227,7 +342,7 @@ void CALLCONV FF_BubbleP(FF_MixData *mix,const double *T, const double x[],const
             option='l';
             FF_MixPhiEOS(mix,T,&P,x,&option,substPhiL);  //phi of liquid phase
             for (i=0;i<mix->numSubs;i++){ //Initialization of phi of gas phase
-                substPhiG[i]=1;
+                substPhiG[i]=1.0;
             }
             for(j=0;j<3;j++){
                 yTotal=0;
@@ -604,6 +719,7 @@ void CALLCONV FF_DewP(FF_MixData *mix,const double *T, const double y[],const do
                         if(j==0){  //You can't use the fugacity coef. from gas phase. In this case use Wilson. Perhaps is better to begin always with Wilson
                             if (yPhase=='g') k[i]=exp(log(mix->baseProp[i].Pc/ P)+5.373*(1+mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ *T));
                             else k[i]=substPhiL[i];
+                            k[i]=exp(log(mix->baseProp[i].Pc/ P)+5.373*(1+mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ *T));
                         }
                         else k[i]=substPhiL[i]/substPhiG[i];
                         x[i]=y[i]/k[i];
@@ -935,7 +1051,7 @@ void CALLCONV FF_DewP1(FF_MixData *mix,const double *T, const double y[],const d
 
 //Pressure envelope of a binary mixture
 void CALLCONV FF_PressureEnvelope(FF_MixData *mix,const double *T, const int *nPoints, double c[],double bP[],double y[],double dP[],double x[]){
-    mix->numSubs=2;
+    if(mix->numSubs!=2) return;
     int i;
     double interval;
     double Vp;
@@ -1414,7 +1530,7 @@ void CALLCONV FF_DewT(FF_MixData *mix,const double *P, const double y[],const do
             else if(VyL<(0.57*VyPrev*T/Tprev)) yPhase='l';//Very important. Determination of the point where all roots are liquid
             if(fabs((VyG-VyL)/VyL)>0.05) yPhase='b';  //If we have two different roots we overwrite the dituation
             VyPrev=VyL;
-            printf("y[0]:%f T:%f VyL:%f VyG:%f yPhase:%c\n",y[0],T,VyL,VyG,yPhase);
+            //printf("y[0]:%f T:%f VyL:%f VyG:%f yPhase:%c\n",y[0],T,VyL,VyG,yPhase);
             if(yPhase=='l'){  //necesary gas
                 Tprev=T;
                 T=T+Tmax/n;
@@ -1488,7 +1604,7 @@ void CALLCONV FF_DewT(FF_MixData *mix,const double *P, const double y[],const do
                 }
             }
             counter++;
-            printf("Counter:%i xTotal:%f x[0]:%f VyL:%f VyG:%f VxL:%f VxG:%f New T:%f\n",counter,xTotal,x[0],VyL,VyG,VxL,VxG,T);
+            //printf("Counter:%i xTotal:%f x[0]:%f VyL:%f VyG:%f VxL:%f VxG:%f New T:%f\n",counter,xTotal,x[0],VyL,VyG,VxL,VxG,T);
             if(counter>20) break;
         } while((xTotal<xLow)||(xTotal>xHigh));//((tpdl<tpdlMin)||(tpdl>tpdlMax)||(xTotal<xLow)||(xTotal>xHigh))
     //printf("y[0]:%f Counter:%i n:%i xTotal:%f P:%f tpdl:%f\n",y[0],counter,n,xTotal,P,tpdl);
@@ -1795,21 +1911,22 @@ void CALLCONV FF_TemperatureEnvelope(FF_MixData *mix,const double *P, const int 
 void CALLCONV FF_VLflashPT(FF_MixData *mix,const double *T,const double *P,const double f[],
                            double x[],double y[],double substPhiL[],double substPhiG[],double *beta){//f is feed composition, beta is the gas fraction
     FF_SubsActivityData actData[mix->numSubs];
-    double k[mix->numSubs],xTotal,yTotal,substPhiF[mix->numSubs];
+    double k[mix->numSubs],xTotal,yTotal,substPhiF[mix->numSubs],logFeedFugacity[mix->numSubs];
     char option,state;
-    int i,j,n=0,side=0,numRep;
+    int i,j,numRep;
     double answerL[3],answerG[3];
     double kInit[mix->numSubs];//initial k
     double vL,vG;//volume of heavy and light trial phases
-    double xmin=0,xmax=1,a,fxmin,fxmax,fa;//minimum, maximum and test gas fractions, and its Rachford-Rice function results
-    double tpdl,tpdg,tpd,tpdmin;//tangent plane distances of liquid and gas phases, total, and minimum of trials
-    double cprevious[mix->numSubs];//previous trial composition
-    double cDeltaPrev,cDeltaFeed;//differential composition regarding previous stability test
-    printf("Arrived to flash\n");
+    double a;// gas fraction
+    double tpdl,tpdg,tpd,tpdlmin,tpdgmin;//tangent plane distances of liquid and gas phases, total, and minimum of trials
+    double substPhiTest[mix->numSubs];//to hold calculation values
+    //printf("Arrived to flash\n");
     *beta=HUGE_VALF;
-    if(mix->thModelActEos==0){//If gamma-phi approach is used
-        printf("Activity model\n");
-        if (mix->mixRule==FF_VdW) mix->mixRule=FF_VdWnoInt;
+    //If gamma-phi approach is used
+    if(mix->thModelActEos==0){
+        //printf("Activity model\n");
+        //Perhaps this alternative can be avoided and unify with the phi-phi approach for kInit, using the gas EOS
+        if (mix->mixRule==FF_VdW) mix->mixRule=FF_VdWnoInt;//The BIP are for the activity model, not for the EOS
         FF_PhiAndActivity(mix,T,P,f,actData,substPhiL);//fugacity coef. of the feed as liquid
         option='g';
         FF_MixVfromTPeos(mix,T,P,f,&option,answerL,answerG,&state);
@@ -1817,7 +1934,7 @@ void CALLCONV FF_VLflashPT(FF_MixData *mix,const double *T,const double *P,const
         if(answerG[2]>0.3){//If we can grant a gas phase for the eos calculation
             FF_MixPhiEOS(mix,T,P,f,&option,substPhiG);
             for(i=0;i<mix->numSubs;i++){
-                tpdl=tpdl+f[i]*(log(substPhiL[i])-log(substPhiG[i]));
+                tpdl=tpdl+f[i]*(log(substPhiL[i])-log(substPhiG[i]));//checks if gas phase is inestable
                 kInit[i]=substPhiL[i]/substPhiG[i];
             }
         }
@@ -1828,182 +1945,14 @@ void CALLCONV FF_VLflashPT(FF_MixData *mix,const double *T,const double *P,const
         if(tpdl<0)for(i=0;i<mix->numSubs;i++) substPhiF[i]=substPhiL[i];//determine the more stable phase for the feed
         else for(i=0;i<mix->numSubs;i++) substPhiF[i]=substPhiG[i];
     }
-    else{//phi-phi approach
+    //phi-phi approach
+    else{
         //Calculate stable phase for the feed and its fugacity coefficients
-        printf("fugacity model\n");
+        //printf("fugacity model\n");
         option='s';
         FF_MixVfromTPeos(mix,T,P,f,&option,answerL,answerG,&state);
-        printf("state:%c\n",state);
+        //printf("state:%c\n",state);
         if((state=='L')||(state=='l')||(state=='U')||(state=='u')) option='l';
-        else if((state=='G')||(state=='g')) option='g';
-        else return;
-        FF_MixPhiEOS(mix,T,P,f,&option,substPhiF);//Calculation of feed fugacity coef
-        printf("Feed state: %c \n",state);
-
-        //initialize kInit[i] and check that the generated phases are not changed
-        xTotal=0;
-        yTotal=0;
-        for (i=0;i<mix->numSubs;i++){
-            kInit[i]=exp(log(mix->baseProp[i].Pc/ *P)+5.373*(1-mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ *T));
-            x[i]=f[i]/kInit[i];
-            xTotal=xTotal+x[i];
-            y[i]=f[i]*kInit[i];
-            yTotal=yTotal+y[i];
-        }
-        for(i=0;i<mix->numSubs;i++){
-            x[i]=x[i]/xTotal;//normalization of x[i]
-            y[i]=y[i]/yTotal;//normalization of y[i]
-        }
-        option='s';
-        FF_MixVfromTPeos(mix,T,P,x,&option,answerL,answerG,&state);
-        if((state=='L')||(state=='l')||(state=='U')||(state=='E')) vL=answerL[0];
-        else vL=answerG[0];
-        FF_MixVfromTPeos(mix,T,P,y,&option,answerL,answerG,&state);
-        if((state=='G')||(state=='g')||(state=='U')||(state=='E')) vG=answerG[0];
-        else vG=answerL[0];
-        if(vL>vG) for(i=0;i<mix->numSubs;i++) kInit[i]=1/kInit[i];//If phases are changed we invert them. cpmare densities instead of volumes?
-    }
-    //Here begins calculation of the possible phase split
-    numRep=10;
-    FF_RachfordRiceSolver(mix,T,P,f,kInit,&numRep,x,y,substPhiL,substPhiG,&a);
-
-    //In case a good solution for beta has been found we check the unstability of the feed
-    if((a>0)&&(a<1)){
-        tpdl=0;
-        tpdg=0;
-        for(i=0;i<mix->numSubs;i++){
-            tpdl=tpdl+x[i]*(log(x[i])+log(substPhiL[i])-log(f[i])-log(substPhiF[i]));
-            tpdg=tpdg+y[i]*(log(y[i])+log(substPhiG[i])-log(f[i])-log(substPhiF[i]));
-        }
-        tpd=(1-a)*tpdl+a*tpdg;
-        //printf("tpdl: %f tpdg: %f tpd: %f\n",tpdl,tpdg,tpd);
-        //if(tpd<0) *beta=a;
-    }
-    *beta=a;
-    return;
-    //If feed seems stable we do the full stability analysis and, if necessary return to the Rachford-rice solver with better start k.
-    if((a==0)||(a==1)||((tpdl>0)&&(tpdg>0))){
-        //Generate heavy trial compositions using initial k values
-        xTotal=0;
-        for (i=0;i<mix->numSubs;i++){
-            cprevious[i]=0;
-            x[i]=f[i]/kInit[i];//Initial trial composition of the liquid phase
-            xTotal=xTotal+x[i];
-        }
-        for(i=0;i<mix->numSubs;i++){
-            x[i]=x[i]/xTotal;//normalization of x[i]
-        }
-        tpdmin=1;
-        option='l';
-        for(j=0;j<10;j++){//Loop to obtain the minimum tpd
-            if(mix->thModelActEos==0) FF_PhiAndActivity(mix,T,P,x,actData,substPhiL);
-            else FF_MixPhiEOS(mix,T,P,x,&option,substPhiL);
-            tpdl=0;
-            for(i=0;i<mix->numSubs;i++){
-                tpdl=tpdl+x[i]*(log(x[i])+log(substPhiL[i])-log(f[i])-log(substPhiF[i]));
-            }
-            if(tpdl<0) break;//If we obtain a negative tpd feed is innestable and we can finish
-            xTotal=0;
-            for(i=0;i<mix->numSubs;i++){
-                x[i]=f[i]*substPhiF[i]/substPhiL[i];
-                xTotal=xTotal+x[i];
-            }
-            cDeltaPrev=0;
-            cDeltaFeed=0;
-            for(i=0;i<mix->numSubs;i++){
-                x[i]=x[i]/xTotal;//We prepare the new x values
-                cDeltaPrev=cDeltaPrev+fabs(x[i]-cprevious[i]);
-                cDeltaFeed=cDeltaFeed+abs(x[i]-f[i]);
-                cprevious[i]=x[i];
-            }
-            if((cDeltaPrev<0.001)||(cDeltaFeed<0.001))break;//composition is not changing or is that of feed
-        }
-        if(tpdl>0){
-            //Generate light trial compositions using initial k values
-            yTotal=0;
-            for (i=0;i<mix->numSubs;i++){
-                cprevious[i]=0;
-                y[i]=f[i]*kInit[i];//Initial trial composition of the gas phase
-                yTotal=yTotal+y[i];
-            }
-            for(i=0;i<mix->numSubs;i++) y[i]=y[i]/yTotal;//normalization of y[i]
-            option='g';
-            for(j=0;j<10;j++){//Loop to obtain the minimum tpd
-                FF_MixPhiEOS(mix,T,P,y,&option,substPhiG);
-                tpdg=0;
-                for(i=0;i<mix->numSubs;i++){
-                    tpdg=tpdg+y[i]*(log(y[i])+log(substPhiG[i])-log(f[i])-log(substPhiF[i]));
-                }
-                if(tpdg<0) break;//If we obtain a negative tpd feed is innestable and we can finish
-                yTotal=0;
-                for(i=0;i<mix->numSubs;i++){
-                    y[i]=f[i]*substPhiF[i]/substPhiG[i];
-                    yTotal=yTotal+y[i];
-                }
-                cDeltaPrev=0;
-                cDeltaFeed=0;
-                for(i=0;i<mix->numSubs;i++){
-                    y[i]=y[i]/yTotal;//We prepare the new x values
-                    cDeltaPrev=cDeltaPrev+fabs(y[i]-cprevious[i]);
-                    cDeltaFeed=cDeltaFeed+abs(y[i]-f[i]);
-                    cprevious[i]=y[i];
-                }
-                if((cDeltaPrev<0.001)||(cDeltaFeed<0.001))break;//composition is not changing or is that of feed
-            }
-        }
-        xmin=0;
-        xmax=1;
-        xTotal=0;
-        yTotal=0;
-        if((tpdl<0)||(tpdg<0)){
-            for(i=0;i<mix->numSubs;i++) k[i]=substPhiL[i]/substPhiG[i];
-        }
-    }
-
-}
-
-
-//VL flash calculation, given T, P, feed composition, eos and mixing rule
-void CALLCONV FF_VLflashPT1(FF_MixData *mix,const double *T,const double *P,const double f[],
-                           double x[],double y[],double substPhiL[],double substPhiG[],double *beta){//f is feed composition, beta is the gas fraction
-    FF_SubsActivityData actData[mix->numSubs];
-    double k[mix->numSubs],xTotal,yTotal,substPhiF[mix->numSubs];
-    char option,state;
-    int i,j,n=0,side=0;
-    double answerL[3],answerG[3];
-    double kInit[mix->numSubs];//initial k
-    double vL,vG;//volume of heavy and light trial phases
-    double xmin=0,xmax=1,a,fxmin,fxmax,fa;//minimum, maximum and test gas fractions, and its Rachford-Rice function results
-    double tpdl,tpdg,tpd,tpdmin;//tangent plane distances of liquid and gas phases, total, and minimum of trials
-    double cprevious[mix->numSubs];//previous trial composition
-    double cDeltaPrev,cDeltaFeed;//differential composition regarding previous stability test
-
-    *beta=HUGE_VALF;
-    if(mix->thModelActEos==0){//If gamma-phi approach is used
-        if (mix->mixRule==FF_VdW) mix->mixRule=FF_VdWnoInt;
-        FF_PhiAndActivity(mix,T,P,f,actData,substPhiL);//fugacity coef. of the feed as liquid
-        option='g';
-        FF_MixVfromTPeos(mix,T,P,f,&option,answerL,answerG,&state);
-        tpdl=0;
-        if(answerG[2]>0.3){//If we can grant a gas phase for the eos calculation
-            FF_MixPhiEOS(mix,T,P,f,&option,substPhiG);
-            for(i=0;i<mix->numSubs;i++){
-                tpdl=tpdl+f[i]*(log(substPhiL[i])-log(substPhiG[i]));
-                kInit[i]=substPhiL[i]/substPhiG[i];
-            }
-        }
-        else for(i=0;i<mix->numSubs;i++){//If we do not find a gas phase with the eos we asume that phis are 1 in gas phase
-            tpdl=tpdl+f[i]*log(substPhiL[i]);
-            kInit[i]=substPhiL[i];
-        }
-        if(tpdl<0)for(i=0;i<mix->numSubs;i++) substPhiF[i]=substPhiL[i];//determine the more stable phase for the feed
-        else for(i=0;i<mix->numSubs;i++) substPhiF[i]=substPhiG[i];
-    }
-    else{//If phi-phi approach is used
-        //Calculate stable phase for the feed and its fugacity coefficients
-        option='s';
-        FF_MixVfromTPeos(mix,T,P,f,&option,answerL,answerG,&state);
-        if((state=='L')||(state=='l')||(state=='U')) option='l';
         else if((state=='G')||(state=='g')) option='g';
         else return;
         FF_MixPhiEOS(mix,T,P,f,&option,substPhiF);//Calculation of feed fugacity coef
@@ -2030,177 +1979,202 @@ void CALLCONV FF_VLflashPT1(FF_MixData *mix,const double *T,const double *P,cons
         FF_MixVfromTPeos(mix,T,P,y,&option,answerL,answerG,&state);
         if((state=='G')||(state=='g')||(state=='U')||(state=='E')) vG=answerG[0];
         else vG=answerL[0];
-        if(vL>vG) for(i=0;i<mix->numSubs;i++) kInit[i]=1/kInit[i];//If phases are changed we invert them
+        if(vL>vG) for(i=0;i<mix->numSubs;i++) kInit[i]=1/kInit[i];//If phases are changed we invert them. compare densities instead of volumes?
     }
 
-    for(i=0;i<mix->numSubs;i++) k[i]=kInit[i];
-    for(j=0;j<10;j++){//We perform 10 times the solution of the Rachford-Rice equation
-        //printf("loop: %i\n",j);
-        xTotal=0;
-        yTotal=0;
-        for (i=0;i<mix->numSubs;i++){
-            //printf("k[%i]: %f\n",i,k[i]);
-            y[i]=f[i]*k[i];
-            yTotal=yTotal+y[i];
-        }
-        //printf("yTotal: %f\n",yTotal);
-        if(yTotal<=1){//Probably the mixture is at or below the bubble temperature
-            for(i=0;i<mix->numSubs;i++){
-                x[i]=f[i];
-                y[i]=y[i]/yTotal;//normalization of y[i]
-            }
-            a=0;
-        }
-        else{
-            for(i=0;i<mix->numSubs;i++){
-                x[i]=f[i]/k[i];
-                xTotal=xTotal+x[i];
-            }
-            //printf("xTotal: %f\n",xTotal);
-            if(xTotal<=1){//probably the mixture is over the dew temperature
-                for(i=0;i<mix->numSubs;i++){
-                    y[i]=f[i];
-                    x[i]=x[i]/xTotal;//normalization of x[i]
-                }
-                a=1;
-            }
-            else{//we need to solve the Rachford-Rice equation using k[i]
-                fxmin=yTotal-1;//this must be negative
-                fxmax=1-xTotal;//this must be positive
-                fa=1;
-                n=0;
-                while ((n<20)&&(fabs(fa)>0.001)){//we begin to seek for the root
-                    n=n+1;
-                    a=(xmin*fxmax-xmax*fxmin)/(fxmax-fxmin);//This is the regula falsi method, Anderson-Bjork modified
-                    fa=0;
-                    for(i=0;i<mix->numSubs;i++) fa=fa+f[i]*((k[i]-1)/(1-a*(1-k[i])));//Rachford-Rice equation
-                    //y=(*f)(*x);
-                    if ((fa<0.001)&&(fa>-0.001)) break;//if we have arrived to the solution exit
-                    if ((fxmax * fa)>0){//if the proposed solution is of the same sign than f(xmax)
-                        if (side==-1){//if it happened also in the previous loop
-                            if ((1-fa/fxmax)>0) fxmin *= (1-fa/fxmax);//we decrease f(xmin) for the next loop calculation
-                            else fxmin *= 0.5;
-                        }
-                        xmax=a;
-                        fxmax=fa;
-                        side = -1;//we register than the solution was of the same sign than previous xmax
-                    }
-                    else{//If the prosed solution is of the same sign than f(xmin) we apply the same technic
-                        if (side==1){
-                            if ((1-fa/fxmin)>0) fxmax *= (1-fa/fxmin);
-                            else fxmax *= 0.5;
-                        }
-                        xmin=a;
-                        fxmin=fa;
-                        side = 1;
-                    }
-                }
-                //printf("j: %i Gas fraction: %f\n",j,a);
-                //Now that we have the gas fraction we calculate the composition of the phases
-                for(i=0;i<mix->numSubs;i++){
-                    x[i]=f[i]/(1+a*(k[i]-1));
-                    y[i]=x[i]*k[i];
-                    //printf("i: %i x: %f y: %f\n",i,x[i],y[i]);
-                }
-            }
-        }
-        //It follows the calculation of the new k[i]
-        if(mix->thModelActEos==0) FF_PhiAndActivity(mix,T,P,x,actData,substPhiL);
-        else{
-            option='l';
-            FF_MixVfromTPeos(mix,T,P,x,&option,answerL,answerG,&state);
-            //printf("%f\n",answerL[0]);
-            FF_MixPhiEOS(mix,T,P,x,&option,substPhiL);
-        }
+    //Here begins calculation of the possible phase split
+    //we calculate once the log of the fugacity/pressure for the feed
+    for(i=0;i<mix->numSubs;i++)logFeedFugacity[i]=log(f[i]*substPhiF[i]);
+    numRep=10;
+    FF_RachfordRiceSolver(mix,T,P,f,kInit,&numRep,x,y,substPhiL,substPhiG,&a);
 
-        option='g';
-        FF_MixVfromTPeos(mix,T,P,y,&option,answerL,answerG,&state);
-        //printf("%f\n",answerG[0]);
-        FF_MixPhiEOS(mix,T,P,y,&option,substPhiG);
-        for(i=0;i<mix->numSubs;i++) k[i]=substPhiL[i]/substPhiG[i];
-    }
-    if((a>0)&&(a<1)){//In case a good solution for beta has been found we check the unstability of the feed
+    //In case a good solution for beta has been found we check the unstability of the feed
+    if((a>0)&&(a<1)){
         tpdl=0;
         tpdg=0;
         for(i=0;i<mix->numSubs;i++){
-            tpdl=tpdl+x[i]*(log(x[i])+log(substPhiL[i])-log(f[i])-log(substPhiF[i]));
-            tpdg=tpdg+y[i]*(log(y[i])+log(substPhiG[i])-log(f[i])-log(substPhiF[i]));
+            tpdl=tpdl+x[i]*(log(x[i])+log(substPhiL[i])-logFeedFugacity[i]);
+            tpdg=tpdg+y[i]*(log(y[i])+log(substPhiG[i])-logFeedFugacity[i]);
         }
         tpd=(1-a)*tpdl+a*tpdg;
         //printf("tpdl: %f tpdg: %f tpd: %f\n",tpdl,tpdg,tpd);
-        if(tpd<0) *beta=a;
-        return;
-    }
-    if((a==0)||(a==1)||((tpdl>0)&&(tpdg>0))){//If feed seems stable we do the full stability analysis
-        //Generate heavy trial compositions using initial k values
-        xTotal=0;
-        for (i=0;i<mix->numSubs;i++){
-            cprevious[i]=0;
-            x[i]=f[i]/kInit[i];//Initial trial composition of the liquid phase
-            xTotal=xTotal+x[i];
+        //if(tpd<0) *beta=a;
+        if(tpd<0){
+            *beta=a;
+            return;
         }
-        for(i=0;i<mix->numSubs;i++) x[i]=x[i]/xTotal;//normalization of x[i]
-        tpdmin=1;
-        option='l';
-        for(j=0;j<10;j++){//Loop to obtain the minimum tpd
-            FF_MixPhiEOS(mix,T,P,x,&option,substPhiL);
-            tpdl=0;
-            for(i=0;i<mix->numSubs;i++){
-                tpdl=tpdl+x[i]*(log(x[i])+log(substPhiL[i])-log(f[i])-log(substPhiF[i]));
-            }
-            if(tpdl<0) break;//If we obtain a negative tpd feed is innestable and we can finish
+    }
+
+    //If feed seems stable we do the full stability analysis and, if necessary, return to the Rachford-Rice solver with better start k.
+    else{
+        tpdlmin=+HUGE_VALF;
+        for(j=0;j<5;j++){
             xTotal=0;
-            for(i=0;i<mix->numSubs;i++){
-                x[i]=f[i]*substPhiF[i]/substPhiL[i];
+            for (i=0;i<mix->numSubs;i++){
+                if(j==0){
+                    k[i]=kInit[i];
+                    x[i]=f[i]/k[i];
+                }
+                else{
+                    x[i]=f[i]*substPhiF[i]/substPhiTest[i];
+                }
                 xTotal=xTotal+x[i];
             }
-            cDeltaPrev=0;
-            cDeltaFeed=0;
-            for(i=0;i<mix->numSubs;i++){
-                x[i]=x[i]/xTotal;//We prepare the new x values
-                cDeltaPrev=cDeltaPrev+fabs(x[i]-cprevious[i]);
-                cDeltaFeed=cDeltaFeed+abs(x[i]-f[i]);
-                cprevious[i]=x[i];
+            for(i=0;i<mix->numSubs;i++)x[i]=x[i]/xTotal;//normalization of x[i]
+            option='s';
+            FF_MixVfromTPeos(mix,T,P,x,&option,answerL,answerG,&state);
+            if((state=='L')||(state=='l')||(state=='U')||(state=='u')) option='l';
+            else if((state=='G')||(state=='g')) option='g';
+            FF_MixPhiEOS(mix,T,P,x,&option,substPhiTest);
+            tpdl=0;
+            for(i=0;i<mix->numSubs;i++) tpdl=tpdl+x[i]*(log(x[i]*substPhiTest[i])-logFeedFugacity[i]);
+            //printf("Second round tpdl:%f\n",tpdl);
+            if(tpdl<tpdlmin){
+                tpdlmin=tpdl;
+                for(i=0;i<mix->numSubs;i++)substPhiL[i]=substPhiTest[i];
             }
-            if((cDeltaPrev<0.001)||(cDeltaFeed<0.001))break;//composition is not changing or is that of feed
         }
-        if(tpdl>0){
-            //Generate light trial compositions using initial k values
+        tpdgmin=+HUGE_VALF;
+        for(j=0;j<5;j++){
             yTotal=0;
             for (i=0;i<mix->numSubs;i++){
-                cprevious[i]=0;
-                y[i]=f[i]*kInit[i];//Initial trial composition of the gas phase
+                if(j==0){
+                    k[i]=kInit[i];
+                    y[i]=f[i]*k[i];
+                }
+                else{
+                    y[i]=f[i]*substPhiF[i]/substPhiG[i];
+                }
                 yTotal=yTotal+y[i];
             }
-            for(i=0;i<mix->numSubs;i++) y[i]=y[i]/yTotal;//normalization of y[i]
-            option='g';
-            for(j=0;j<10;j++){//Loop to obtain the minimum tpd
-                FF_MixPhiEOS(mix,T,P,y,&option,substPhiG);
-                tpdg=0;
-                for(i=0;i<mix->numSubs;i++){
-                    tpdg=tpdg+y[i]*(log(y[i])+log(substPhiG[i])-log(f[i])-log(substPhiF[i]));
-                }
-                if(tpdg<0) break;//If we obtain a negative tpd feed is innestable and we can finish
-                yTotal=0;
-                for(i=0;i<mix->numSubs;i++){
-                    y[i]=f[i]*substPhiF[i]/substPhiG[i];
-                    yTotal=yTotal+y[i];
-                }
-                cDeltaPrev=0;
-                cDeltaFeed=0;
-                for(i=0;i<mix->numSubs;i++){
-                    y[i]=y[i]/yTotal;//We prepare the new x values
-                    cDeltaPrev=cDeltaPrev+fabs(y[i]-cprevious[i]);
-                    cDeltaFeed=cDeltaFeed+abs(y[i]-f[i]);
-                    cprevious[i]=y[i];
-                }
-                if((cDeltaPrev<0.001)||(cDeltaFeed<0.001))break;//composition is not changing or is that of feed
+            for(i=0;i<mix->numSubs;i++)y[i]=y[i]/yTotal;//normalization of y[i]
+            option='s';
+            FF_MixVfromTPeos(mix,T,P,y,&option,answerL,answerG,&state);
+            if((state=='L')||(state=='l')||(state=='U')||(state=='u')) option='l';
+            else if((state=='G')||(state=='g')) option='g';
+            FF_MixPhiEOS(mix,T,P,y,&option,substPhiTest);
+            tpdg=0;
+            for(i=0;i<mix->numSubs;i++) tpdg=tpdg+y[i]*(log(y[i]*substPhiTest[i])-logFeedFugacity[i]);
+            //printf("Second round tpdg:%f\n",tpdg);
+            if(tpdg<tpdgmin){
+                tpdgmin=tpdg;
+                for(i=0;i<mix->numSubs;i++)substPhiG[i]=substPhiTest[i];
+            }
+        }
+        if((tpdlmin<0)||(tpdgmin<0)){
+            for(i=0;i<mix->numSubs;i++) kInit[i]=substPhiL[i]/substPhiG[i];
+            FF_RachfordRiceSolver(mix,T,P,f,kInit,&numRep,x,y,substPhiL,substPhiG,&a);
+            *beta=a;
+            return;
+        }
+        else{
+            for(i=0;i<mix->numSubs;i++){
+                x[i]=y[i]=f[i];
             }
         }
     }
 
 }
 
+
+//Determines the Gibbs energy of 1 mol of a mix, given T,P,total composition and the part of it assigned to one phase
+double CALLCONV FF_TwoPhasesGibbs(unsigned nVar, const double coef[], double grad[], FF_PTXfeed *data){
+    //printf("Hola Gibbs\n");
+    int i,equal;
+    double xTotal,x[nVar],y[nVar],yTotal,answerL[3],answerG[3],Gr;
+    double substPhi1[nVar],substPhi2[nVar];
+    char option,state;
+    xTotal=0;
+    for(i=0;i<nVar;i++) xTotal=xTotal+coef[i];//count of the number of moles in the fraction 1
+    yTotal=1-xTotal;//number of moles in fraction 2
+    equal=1;
+    for(i=0;i<nVar;i++){//We convert the mole number to fraction
+        x[i]=coef[i]/xTotal;//Normalization of the liquid phase to test
+        y[i]=(data->z[i]-coef[i])/yTotal;
+        if(fabs(x[i]-y[i])>0.01) equal=0;//Detect that the two phases are of different composition
+    }
+    //printf("equal:%i yTotal:%f\n",equal,yTotal);
+    if(equal==1) return 1e5;
+    else{
+        option='s';
+        FF_MixVfromTPeos(data->mix,&data->T,&data->P,x,&option,answerL,answerG,&state);
+        //printf("state:%c\n",state);
+        if((state=='L')||(state=='l')||(state=='U')||(state=='u')) option='l';
+        else if((state=='G')||(state=='g')) option='g';
+        else return;
+        FF_MixPhiEOS(data->mix,&data->T,&data->P,x,&option,substPhi1);
+
+        option='s';
+        FF_MixVfromTPeos(data->mix,&data->T,&data->P,y,&option,answerL,answerG,&state);
+        //printf("state:%c\n",state);
+        if((state=='L')||(state=='l')||(state=='U')||(state=='u')) option='l';
+        else if((state=='G')||(state=='g')) option='g';
+        else return;
+        FF_MixPhiEOS(data->mix,&data->T,&data->P,y,&option,substPhi2);
+        Gr=0;//Residual Gibbs energy
+        for(i=0;i<nVar;i++){
+            Gr=Gr+xTotal*x[i]*(log(x[i]*substPhi1[i]))+yTotal*y[i]*(log(y[i]*substPhi2[i]));
+        }
+        //printf("Gas fract.:%f x[0]:%f y[0]:%f Gr:%f\n",yTotal,x[0],y[0],Gr);
+        return Gr;
+    }
+}
+
+
+//Mixture VL flash, given P,T, composition, and thermo model to use. By global optimization of residual Gibbs energy
+void CALLCONV FF_TwoPhasesFlashPTGO(FF_PTXfeed *data, double x[],double y[],double substPhiL[],double substPhiG[],double *beta)
+{
+    printf("T:%f P:%f z[0]:%f z[1]:%f\n",data->T,data->P,data->z[0],data->z[1]);
+    unsigned nVar;//compositions and gas fraction
+    double optTime;
+    int nEval;
+    double xTotal;
+    nVar=data->mix->numSubs;
+    //printf("nVar:%i\n",nVar);
+    double lb[nVar],ub[nVar],var[nVar],error;
+    int i,code;
+    for (i=0;i<nVar;i++){//limit for the liquid mole numbers
+        lb[i]=0.0;
+        ub[i]=data->z[i];
+        var[i]=0.5*(lb[i]+ub[i]);
+    }
+    nlopt_algorithm alg,algL;
+    nlopt_opt opt,optL;
+    optTime=30;
+    nEval=(nVar-1)*20000;
+    alg=NLOPT_GN_MLSL_LDS;
+    algL=NLOPT_LN_NELDERMEAD;
+    opt=nlopt_create(alg,nVar);
+    optL=nlopt_create(algL,nVar);
+    nlopt_set_ftol_rel(optL, 1e-10);
+    nlopt_set_xtol_rel(optL, 1e-5);
+    nlopt_set_local_optimizer(opt, optL);
+    nlopt_set_lower_bounds(opt, lb);
+    nlopt_set_upper_bounds(opt, ub);
+    nlopt_set_maxeval(opt,nEval);//number of evaluations
+    nlopt_set_maxtime(opt,optTime);//Max.time in seconds
+    nlopt_set_min_objective(opt,FF_TwoPhasesGibbs,data);
+    code=nlopt_optimize(opt, var, &error);
+    nlopt_destroy(optL);
+    nlopt_destroy(opt);
+    printf("Return code:%i\n",code);
+    if (code < 0){
+        printf("nlopt failed!\n");
+    }
+    else{
+        printf("found minimum at f(%g,%g) = %0.15g\n", var[0], var[1], error);
+        printf("fract.1:%f x[0]:%f y[0]:%f\n",var[0]+var[1],var[0]/(var[0]+var[1]),(data->z[0]-var[0])/(1-var[0]-var[1]));
+    }
+
+    xTotal=0;
+    for(i=0;i<nVar;i++) xTotal=xTotal+var[i];//count of the number of moles in the fraction 1
+    *beta=1-xTotal;//number of moles in fraction 2
+    for(i=0;i<nVar;i++){//We convert the mole number to fraction
+        x[i]=var[i]/xTotal;//Normalization of the liquid phase to test
+        y[i]=(data->z[i]-var[i])/ *beta;
+    }
+
+}
 
 
 
