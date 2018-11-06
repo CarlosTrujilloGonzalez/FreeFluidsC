@@ -27,6 +27,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <nlopt.h>
+#include <time.h>
+#include<stdlib.h>
 #include "FFbasic.h"
 #include "FFeosPure.h"
 #include "FFeosMix.h"
@@ -1997,8 +1999,7 @@ void CALLCONV FF_VLflashPT(FF_MixData *mix,const double *T,const double *P,const
             tpdg=tpdg+y[i]*(log(y[i])+log(substPhiG[i])-logFeedFugacity[i]);
         }
         tpd=(1-a)*tpdl+a*tpdg;
-        //printf("tpdl: %f tpdg: %f tpd: %f\n",tpdl,tpdg,tpd);
-        //if(tpd<0) *beta=a;
+        printf("tpdl: %f tpdg: %f tpd: %f\n",tpdl,tpdg,tpd);
         if(tpd<0){
             *beta=a;
             return;
@@ -2080,44 +2081,57 @@ void CALLCONV FF_VLflashPT(FF_MixData *mix,const double *T,const double *P,const
 //Determines the Gibbs energy of 1 mol of a mix, given T,P,total composition and the part of it assigned to one phase
 double CALLCONV FF_TwoPhasesGibbs(unsigned nVar, const double coef[], double grad[], FF_PTXfeed *data){
     //printf("Hola Gibbs\n");
-    int i,equal;
-    double xTotal,x[nVar],y[nVar],yTotal,answerL[3],answerG[3],Gr;
+    int i;
+    double xTotal,x[nVar],y[nVar],yTotal,answerL[3],answerG[3],dif,V1,V2,Gr;
     double substPhi1[nVar],substPhi2[nVar];
-    char option,state;
+    char option1,option2,state;
+    Gr=+HUGE_VALF;
     xTotal=0;
     for(i=0;i<nVar;i++) xTotal=xTotal+coef[i];//count of the number of moles in the fraction 1
     yTotal=1-xTotal;//number of moles in fraction 2
-    equal=1;
+    dif=0;
     for(i=0;i<nVar;i++){//We convert the mole number to fraction
         x[i]=coef[i]/xTotal;//Normalization of the liquid phase to test
         y[i]=(data->z[i]-coef[i])/yTotal;
-        if(fabs(x[i]-y[i])>0.01) equal=0;//Detect that the two phases are of different composition
+        dif=dif+fabs(x[i]-y[i]);
+        //if(fabs(x[i]-y[i])>0.02) equal=0;//Detect that the two phases are of different composition
     }
     //printf("equal:%i yTotal:%f\n",equal,yTotal);
-    if(equal==1) return 1e5;
-    else{
-        option='s';
-        FF_MixVfromTPeos(data->mix,&data->T,&data->P,x,&option,answerL,answerG,&state);
-        //printf("state:%c\n",state);
-        if((state=='L')||(state=='l')||(state=='U')||(state=='u')) option='l';
-        else if((state=='G')||(state=='g')) option='g';
-        else return;
-        FF_MixPhiEOS(data->mix,&data->T,&data->P,x,&option,substPhi1);
+    option1='s';
+    FF_MixVfromTPeos(data->mix,&data->T,&data->P,x,&option1,answerL,answerG,&state);
+    //printf("state:%c\n",state);
+    if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
+        option1='l';
+        V1=answerL[0];
+    }
+    else if((state=='G')||(state=='g')){
+        option1='g';
+        V1=answerG[0];
+    }
+    else return Gr;
+    option2='s';
+    FF_MixVfromTPeos(data->mix,&data->T,&data->P,y,&option2,answerL,answerG,&state);
+    //printf("state:%c\n",state);
+    if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
+        option2='l';
+        V2=answerL[0];
+    }
+    else if((state=='G')||(state=='g')){
+        option2='g';
+        V2=answerG[0];
+    }
+    else return Gr;
 
-        option='s';
-        FF_MixVfromTPeos(data->mix,&data->T,&data->P,y,&option,answerL,answerG,&state);
-        //printf("state:%c\n",state);
-        if((state=='L')||(state=='l')||(state=='U')||(state=='u')) option='l';
-        else if((state=='G')||(state=='g')) option='g';
-        else return;
-        FF_MixPhiEOS(data->mix,&data->T,&data->P,y,&option,substPhi2);
+    if((dif>0.01*nVar)||(fabs(V1-V2)/V1)>0.1){
+        FF_MixPhiEOS(data->mix,&data->T,&data->P,x,&option1,substPhi1);
+        FF_MixPhiEOS(data->mix,&data->T,&data->P,y,&option2,substPhi2);
         Gr=0;//Residual Gibbs energy
         for(i=0;i<nVar;i++){
             Gr=Gr+xTotal*x[i]*(log(x[i]*substPhi1[i]))+yTotal*y[i]*(log(y[i]*substPhi2[i]));
         }
         //printf("Gas fract.:%f x[0]:%f y[0]:%f Gr:%f\n",yTotal,x[0],y[0],Gr);
         return Gr;
-    }
+    } 
 }
 
 
@@ -2140,14 +2154,14 @@ void CALLCONV FF_TwoPhasesFlashPTGO(FF_PTXfeed *data, double x[],double y[],doub
     }
     nlopt_algorithm alg,algL;
     nlopt_opt opt,optL;
-    optTime=30;
-    nEval=(nVar-1)*20000;
+    optTime=60;
+    nEval=(nVar-1)*(nVar-1)*20000;
     alg=NLOPT_GN_MLSL_LDS;
     algL=NLOPT_LN_NELDERMEAD;
     opt=nlopt_create(alg,nVar);
     optL=nlopt_create(algL,nVar);
-    nlopt_set_ftol_rel(optL, 1e-10);
-    nlopt_set_xtol_rel(optL, 1e-5);
+    nlopt_set_ftol_rel(optL, 1e-8);
+    nlopt_set_xtol_rel(optL, 1e-4);
     nlopt_set_local_optimizer(opt, optL);
     nlopt_set_lower_bounds(opt, lb);
     nlopt_set_upper_bounds(opt, ub);
@@ -2173,8 +2187,298 @@ void CALLCONV FF_TwoPhasesFlashPTGO(FF_PTXfeed *data, double x[],double y[],doub
         x[i]=var[i]/xTotal;//Normalization of the liquid phase to test
         y[i]=(data->z[i]-var[i])/ *beta;
     }
+}
+
+//Mixture VL flash, given P,T, composition, and thermo model to use. By simulated annealing global optimization of the reduced Gibbs energy
+void CALLCONV FF_TwoPhasesFlashPTSA(FF_PTXfeed *data, double x[],double y[],double substPhiL[],double substPhiG[],double *beta,double *Gr){
+    int nVar,i,j,k,l,m;
+    int na;//number of accepted points
+    int ns=20;//number of cycles before step adjustement
+    int nt=5;//number of iterations before temperature is reduced
+    int ne=4;//number of temperature reductions
+    float r;//randon value between 0 and 1
+    float rm;//randon value between 0 and 1
+    nVar=data->mix->numSubs;
+    double a[nVar],b[nVar],aTotal,bTotal,answerL[3],answerG[3],dif,Va,Vb,GrLast,aLast;
+    double step[nVar];//step vector for next composition calculation
+    double T0=5/(R*data->T);//Initial temperature
+    double T;//working temperature of the optimization
+    double accept,stepCorr;
+    char optionA,optionB,state;
+    GrLast=1e6;
+
+    srand(time(NULL));
+    T=T0;
+    for(i=0;i<nVar;i++){//Initialization of both phases at feed composition, and the step vector
+        a[i]=0.3*data->z[i];
+        x[i]=data->z[i];
+        y[i]=data->z[i];
+        step[i]=data->z[i];
+    }
+    for(m=0;m<ne;m++){
+        for(l=0;l<nt;l++){//loops at fixed T
+            na=0;
+            for(k=0;k<ns;k++){//loops at fixed step vector
+                r=(float) 2*rand()/RAND_MAX-1;//randon number between -1 and 1
+                //printf("r:%f\n",r);
+                for(j=0;j<nVar;j++){//loop along composition
+                    aLast=a[j];
+                    //a[j]=r*step[j]+a[j]*(1-step[j]/data->z[j]);//alternative with randon [0,1]
+                    if(r>0) a[j]=a[j]+r*(data->z[j]-a[j]);//New point to test
+                    else a[j]=a[j]+r*a[j];
+                    aTotal=0;
+                    for(i=0;i<nVar;i++) aTotal=aTotal+a[i];//count of the number of moles in the fraction 1
+                    bTotal=1-aTotal;//number of moles in fraction 2
+                    dif=0;
+                    for(i=0;i<nVar;i++){//We convert the mole number to fraction
+                        x[i]=a[i]/aTotal;//Normalization of the liquid phase to test
+                        y[i]=(data->z[i]-a[i])/bTotal;
+                        dif=dif+fabs(x[i]-y[i]);
+                    }
+                    optionA='s';
+                    FF_MixVfromTPeos(data->mix,&data->T,&data->P,x,&optionA,answerL,answerG,&state);
+                    if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
+                        optionA='l';
+                        Va=answerL[0];
+                    }
+                    else if((state=='G')||(state=='g')){
+                        optionA='g';
+                        Va=answerG[0];
+                    }
+                    else *Gr=1e6;
+                    //printf("state:%c Va:%f\n",state,Va);
+                    optionB='s';
+                    FF_MixVfromTPeos(data->mix,&data->T,&data->P,y,&optionB,answerL,answerG,&state);
+                    if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
+                        optionB='l';
+                        Vb=answerL[0];
+                    }
+                    else if((state=='G')||(state=='g')){
+                        optionB='g';
+                        Vb=answerG[0];
+                    }
+                    else *Gr=1e6;
+                    //printf("state:%c Vb:%f\n",state,Vb);
+                    if((dif>0.01*nVar)||(fabs(Va-Vb)/Va)>0.1){
+                        FF_MixPhiEOS(data->mix,&data->T,&data->P,x,&optionA,substPhiL);
+                        FF_MixPhiEOS(data->mix,&data->T,&data->P,y,&optionB,substPhiG);
+                        *Gr=0;//Residual Gibbs energy
+                        for(i=0;i<nVar;i++){
+                            *Gr=*Gr+aTotal*x[i]*(log(x[i]*substPhiL[i]))+bTotal*y[i]*(log(y[i]*substPhiG[i]));
+                            //printf("Gas fract.:%f x[0]:%f y[0]:%f Gr:%f\n",bTotal,x[0],y[0],Gr);
+                        }
+                    }
+                    else *Gr=1e6;
+                    if(*Gr>=GrLast){
+                        rm=(float) rand()/RAND_MAX;//randon number between 0 and 1 for Metropolis criteria
+                        if(exp((GrLast-*Gr)/T)>rm){
+                            //printf("R rm:%f exp:%f Gas fract.:%f a[0]:%f a[1]:%f GrLast:%f Gr:%f\n",rm,exp((GrLast-Gr)/T),bTotal,a[0],a[1],GrLast,Gr);
+                            GrLast=*Gr;
+                            na=na+1;
+                        }
+                        else{
+                            a[j]=aLast;
+                            //printf("M rm:%f exp:%f Gr:%f\n",rm,exp((GrLast-Gr)/T),Gr);
+                        }
+                    }
+                    else{
+                        //printf("B Gas fract.:%f a[0]:%f a[1]:%f Gr:%f\n",bTotal,a[0],a[1],Gr);
+                        GrLast=*Gr;
+                        na=na+1;
+                    }
+                }
+            }
+            accept=(double) na/(ns*nVar);
+            //printf("accepted:%i tests:%i acceptance:%f\n",na,ns*nVar,accept);
+            //printf("----------------------\n");
+            if(accept>0.6){
+                stepCorr=1+(accept-0.6)/0.2;
+                for(i=0;i<nVar;i++) step[i]=step[i]*stepCorr;
+                //printf("accept:%f stepCorr mult:%f\n",accept,stepCorr);
+            }
+            else if(accept<0.4){
+                stepCorr=1+(0.4-accept)/0.2;
+                for(i=0;i<nVar;i++) step[i]=step[i]/stepCorr;
+                //printf("accept:%f stepCorr divis:%f\n",accept,stepCorr);
+            }
+        }
+        T=T*0.85;
+        //printf("New T:%f\n",T);
+        //printf("-------------------\n");
+    }
+    //finally 6 loops of Rachfor-rice Solver to smotth the result
+    int numRep=6;
+    double kInit[nVar];
+    for(i=0;i<nVar;i++){
+        kInit[i]=substPhiL[i]/substPhiG[i];
+    }
+    FF_RachfordRiceSolver(data->mix,&data->T,&data->P,data->z,kInit,&numRep,x,y,substPhiL,substPhiG,beta);
+    *Gr=0;//Residual Gibbs energy
+    for(i=0;i<nVar;i++){
+        *Gr=*Gr+(1-*beta)*x[i]*(log(x[i]*substPhiL[i]))+*beta*y[i]*(log(y[i]*substPhiG[i]));
+        //printf("Gas fract.:%f x[0]:%f y[0]:%f Gr:%f\n",bTotal,x[0],y[0],Gr);
+    }
+    //*beta=bTotal;
 
 }
 
 
+//Mixture VL flash, given P,T, composition, and thermo model to use. By simulated annealing global optimization of the reduced Gibbs energy
+void CALLCONV FF_ThreePhasesFlashPTSA(FF_PTXfeed *data, double x[],double y[],double z[],double substPhiA[],double substPhiB[],double substPhiC[],
+                                      double *beta1,double *beta2,double *Gr){
+    int nSubs,nVar,i,j,k,l,m;
+    int na;//number of accepted points
+    int ns=20;//number of cycles before step adjustement
+    int nt=5;//number of iterations before temperature is reduced
+    int ne=4;//number of temperature reductions
+    float r;//randon value between 0 and 1
+    float rm;//randon value between 0 and 1
+    nSubs=data->mix->numSubs;
+    nVar=nSubs*2;
+    double a[nSubs],b[nSubs],c[nSubs],fract[nSubs],aTotal,bTotal,cTotal,answerL[3],answerG[3],difA,difB,difC,Va,Vb,Vc,GrLast,vLast;
+    double step[nVar];//step vector for next composition calculation
+    double T0=5/(R*data->T);//Initial temperature
+    double T;//working temperature of the optimization
+    double accept,stepCorr;
+    char optionA,optionB,optionC,state;
+    GrLast=1e6;
+
+    srand(time(NULL));
+    T=T0;
+    for(i=0;i<nSubs;i++){//Initialization of both phases at feed composition, and the step vector
+        a[i]=0.5*data->z[i];
+        fract[i]=0.5;
+        b[i]=0.25*data->z[i];
+        c[i]=0.25*data->z[i];
+        x[i]=data->z[i];
+        y[i]=data->z[i];
+        z[i]=data->z[i];
+        step[i]=data->z[i];
+    }
+    for(i=nSubs;i<nVar;i++) step[i]=1;
+    for(m=0;m<ne;m++){
+        for(l=0;l<nt;l++){//loops at fixed T
+            na=0;
+            for(k=0;k<ns;k++){//loops at fixed step vector
+                r=(float) 2*rand()/RAND_MAX-1;//randon number between 0 and 1
+                for(j=0;j<nVar;j++){//loop along composition
+                    if(j<nSubs){//If we change the composition of a
+                        vLast=a[j];//save the actual value
+                        //a[j]=r*step[j]+a[j]*(1-step[j]/data->z[j]);//New point to test
+                        if(r>0) a[j]=a[j]+r*(data->z[j]-a[j]);
+                        else a[j]=a[j]+r*a[j];
+                        b[j]=(1-a[j])*fract[j];
+                    }
+                    else{//If we change the distribution between b and c phases
+                        vLast=fract[j-nSubs];//save the actual value
+                        if(r>0) fract[j-nSubs]=fract[j-nSubs]+r*(1-fract[j-nSubs]);
+                        else fract[j-nSubs]=fract[j-nSubs]+r*fract[j-nSubs];
+                        b[j-nSubs]=(1-a[j-nSubs])*fract[j-nSubs];
+                    }
+                    aTotal=0;
+                    bTotal=0;
+                    for(i=0;i<nSubs;i++){
+                        aTotal=aTotal+a[i];//count of the number of moles in the fraction 1
+                        bTotal=bTotal+b[i];
+                    }
+                    cTotal=1-aTotal-bTotal;//number of moles in fraction 2
+                    difA=0;
+                    difB=0;
+                    difC=0;
+                    for(i=0;i<nSubs;i++){//We convert the mole number to fraction
+                        x[i]=a[i]/aTotal;//Normalization of the liquid phase to test
+                        y[i]=b[i]/bTotal;
+                        z[i]=(data->z[i]-a[i]-b[i])/cTotal;
+                        difA=difA+fabs(x[i]-y[i]);
+                        difA=difB+fabs(x[i]-z[i]);
+                        difC=difC+fabs(y[i]-z[i]);
+                    }
+                    optionA='s';
+                    FF_MixVfromTPeos(data->mix,&data->T,&data->P,x,&optionA,answerL,answerG,&state);
+                    if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
+                        optionA='l';
+                        Va=answerL[0];
+                    }
+                    else if((state=='G')||(state=='g')){
+                        optionA='g';
+                        Va=answerG[0];
+                    }
+                    else *Gr=1e6;
+                    //printf("state:%c Va:%f\n",state,Va);
+                    optionB='s';
+                    FF_MixVfromTPeos(data->mix,&data->T,&data->P,y,&optionB,answerL,answerG,&state);
+                    if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
+                        optionB='l';
+                        Vb=answerL[0];
+                    }
+                    else if((state=='G')||(state=='g')){
+                        optionB='g';
+                        Vb=answerG[0];
+                    }
+                    else *Gr=1e6;
+                    optionC='s';
+                    FF_MixVfromTPeos(data->mix,&data->T,&data->P,z,&optionB,answerL,answerG,&state);
+                    if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
+                        optionB='l';
+                        Vc=answerL[0];
+                    }
+                    else if((state=='G')||(state=='g')){
+                        optionB='g';
+                        Vc=answerG[0];
+                    }
+                    else *Gr=1e6;
+                    //printf("state:%c Vb:%f\n",state,Vb);
+                    if((difA>0.01*nVar)||(fabs(Va-Vb)/Va)>0.1){
+                        FF_MixPhiEOS(data->mix,&data->T,&data->P,x,&optionA,substPhiA);
+                        FF_MixPhiEOS(data->mix,&data->T,&data->P,y,&optionB,substPhiB);
+                        FF_MixPhiEOS(data->mix,&data->T,&data->P,z,&optionC,substPhiC);
+                        *Gr=0;//Residual Gibbs energy
+                        for(i=0;i<nVar;i++){
+                            *Gr=*Gr+aTotal*x[i]*(log(x[i]*substPhiA[i]))+bTotal*y[i]*(log(y[i]*substPhiB[i]))+cTotal*z[i]*(log(z[i]*substPhiC[i]));
+                            //printf("Gas fract.:%f x[0]:%f y[0]:%f Gr:%f\n",bTotal,x[0],y[0],Gr);
+                        }
+                    }
+                    else *Gr=1e6;
+                    if(*Gr>=GrLast){
+                        rm=(float) rand()/RAND_MAX;//randon number between 0 and 1 for Metropolis criteria
+                        if(exp((GrLast-*Gr)/T)>rm){
+                            //printf("R rm:%f exp:%f Gas fract.:%f a[0]:%f a[1]:%f GrLast:%f Gr:%f\n",rm,exp((GrLast-Gr)/T),bTotal,a[0],a[1],GrLast,Gr);
+                            GrLast=*Gr;
+                            na=na+1;
+                        }
+                        else{
+                            if(j<nSubs) a[j]=vLast;
+                            else fract[j-nSubs]=vLast;
+                            //printf("M rm:%f exp:%f Gr:%f\n",rm,exp((GrLast-Gr)/T),Gr);
+                        }
+                    }
+                    else{
+                        //printf("B Gas fract.:%f a[0]:%f a[1]:%f Gr:%f\n",bTotal,a[0],a[1],Gr);
+                        GrLast=*Gr;
+                        na=na+1;
+                    }
+                }
+            }
+            accept=(double) na/(ns*nVar);
+            //printf("accepted:%i tests:%i acceptance:%f\n",na,ns*nVar,accept);
+            //printf("----------------------\n");
+            if(accept>0.6){
+                stepCorr=1+(accept-0.6)/0.2;
+                for(i=0;i<nVar;i++) step[i]=step[i]*stepCorr;
+                //printf("accept:%f stepCorr mult:%f\n",accept,stepCorr);
+            }
+            else if(accept<0.4){
+                stepCorr=1+(0.4-accept)/0.2;
+                for(i=0;i<nVar;i++) step[i]=step[i]/stepCorr;
+                //printf("accept:%f stepCorr divis:%f\n",accept,stepCorr);
+            }
+        }
+        T=T*0.85;
+        //printf("New T:%f\n",T);
+        //printf("-------------------\n");
+    }
+    *beta1=aTotal;
+    *beta2=bTotal;
+
+}
 

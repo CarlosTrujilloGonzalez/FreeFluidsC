@@ -78,7 +78,8 @@ EXP_IMP double CALLCONV FF_TwoPhasesGibbs(unsigned nVar, const double coef[], do
 //VL flash calculation, given T,P, composition, and thermo model to use. By global optimization of residual Gibbs energy
 EXP_IMP void CALLCONV FF_TwoPhasesFlashPTGO(FF_PTXfeed *data, double x[],double y[],double substPhiL[],double substPhiG[],double *beta);
 //void CALLCONV FF_VLflashPTGO();
-
+//Mixture VL flash, given P,T, composition, and thermo model to use. By global optimization simulated annealing of residual Gibbs energy
+void CALLCONV FF_TwoPhasesFlashPTSA(FF_PTXfeed *data, double x[],double y[],double substPhiL[],double substPhiG[],double *beta,double *Gr);
 #ifdef __cplusplus
 }
 #endif
