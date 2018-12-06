@@ -121,7 +121,7 @@ typedef struct{double gEC,gESG,gER,gE,dgE_dT;}FF_ExcessData;
 typedef struct{int numSubs,thModelActEos,actModel,refVpEos,eosType,mixRule;}FF_ThermoModel;
 //Data for a mixture. Includes as arrays(fixed to 15 substances) the substances data, plus definition of the thermo model to use. BIP ar not included
 //as they would change depending on the model choosen for calculations(activity/eos) and the EOS selected
-//thModelActEos=0 indicates that and activity model is used for the liquid phase and that the BIP will be for this activity model. =1 indicates EOS
+//thModelActEos: 0(gamma-phi), 1(phi-phi), 2(gamma-gamma). If an  activity model is used for the liquid phase the BIP will be for this activity model.
 typedef struct {char name[30],description[150],subsName[15][30],CAS[15][22];int model,numSubs,thModelActEos,actModel,refVpEos,eosType,mixRule,intForm,id[15];
                 double refT,refP,intParam[15][15][6];FF_BaseProp baseProp[15];FF_UnifacData unifStdData,
                 unifPSRKData,unifDortData,unifNistData;FF_SinglePointData cp0[15],vp[15],hVsat[15],lCp[15],lDens[15],lVisc[15],lThC[15],lSurfT[15],
@@ -134,7 +134,7 @@ typedef struct {double fraction,MW,T,P,V,A,G,S,U,H,dP_dT,dP_dV,Cv,Cp,SS,JT,IT,Ar
 typedef struct {double MW,T,P;FF_PhaseThermoProp phase[4];}FF_MixThermoProp;
 typedef struct {double uE,hE,gE;}ExcessProp;
 //Data for a defined composition,T and P, with log of fugacity/pressure as an aid to speed up calculations , if needed
-typedef struct {FF_MixData *mix;double T,P,z[15],logSubstFugacity[15];}FF_PTXfeed;
+typedef struct {FF_MixData *mix;double T,P,H,S,z[15],logSubstFugacity[15];}FF_FeedData;
 
 typedef struct {enum FF_CorrEquation eq ;double Tc,Pc,rhoC;unsigned nPoints;double x[40],y[40];}FF_CorrelationData;//The dimension of arrays must be declared in structures
 typedef struct {enum FF_EOS eos ;double MW,Tc,Pc,Zc,w,VdWV,mu,xp,m,chi,ldensFilter,zcFilter,error,vpError,ldensError,zcError;unsigned nPoints;double points[40][3];}FF_EOSPvRhoData;//The dimension of arrays must be declared in structures

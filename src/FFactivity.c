@@ -78,7 +78,7 @@ void CALLCONV FF_ActivityWilson(const int *numSubs,const  FF_BaseProp baseProp[]
             case FF_Pol2J:
             case FF_Pol2C:
                 Lambda[i][j]=V[j]/V[i]*exp(-(pintParam[i][j][0]+pintParam[i][j][1]* *T+
-                            pintParam[i][j][2]/ *T)*RuTinv);
+                            pintParam[i][j][2]/ (*T * *T))*RuTinv);
                 break;
             case FF_Ant3:
                 Lambda[i][j]=exp(pintParam[i][j][0]+pintParam[i][j][1]/ *T+pintParam[i][j][2]*log(*T)+
@@ -141,8 +141,8 @@ void CALLCONV FF_ActivityNRTL(const int *numSubs,const  FF_BaseProp baseProp[],c
                 break;
             case FF_Pol2K:
             case FF_Pol2J:
-            case FF_Pol2C://polynomial 2 form: a+b*T+c/T
-                tau[i][j]=(pintParam[i][j][0]+pintParam[i][j][1]* *T+pintParam[i][j][2]/ *T)*RuTinv;//polynomial 2 form
+            case FF_Pol2C://polynomial 2 form: a+b*T+c/T^2
+                tau[i][j]=(pintParam[i][j][0]+pintParam[i][j][1]* *T+pintParam[i][j][2]/ (*T* *T))*RuTinv;//polynomial 2 form
                 alpha[i][j]=pintParam[i][j][4];
                 break;
             case FF_Ant1://Antoine form: a +b/T+c*ln(T)+d*T
@@ -187,14 +187,17 @@ void CALLCONV FF_ActivityUNIQUAC(const int *numSubs,const  FF_BaseProp baseProp[
     switch(*form){
     case FF_Pol1K://if energy supplied in K, we use R=1
     case FF_Pol2K:
+    case FF_Pol3K:
         Ru=1;
         break;
     case FF_Pol1J://if energy supplied in J/mol
     case FF_Pol2J:
+    case FF_Pol3J:
         Ru=8.314472;
         break;
     case FF_Pol1C://if in calories/mol
     case FF_Pol2C:
+    case FF_Pol3C:
         Ru=1.98588;
         break;
     }
@@ -220,15 +223,20 @@ void CALLCONV FF_ActivityUNIQUAC(const int *numSubs,const  FF_BaseProp baseProp[
         ThetaRes[i]=x[i]*baseProp[i].qRes/Qres;
         for(j=0;j<*numSubs;j++){
             switch(*form){
-            case FF_Pol1K:
+            case FF_Pol1K://polynomial 1 form: a+b*T+c*T^2
             case FF_Pol1J:
             case FF_Pol1C:
-                tau[i][j]=exp(-(pintParam[i][j][0]+pintParam[i][j][1]* *T+pintParam[i][j][2]* *T * *T)*RuTinv);//polynomial form
+                tau[i][j]=exp(-(pintParam[i][j][0]+pintParam[i][j][1]* *T+pintParam[i][j][2]* *T * *T)*RuTinv);
                 break;
-            case FF_Pol2K:
+            case FF_Pol2K://polynomial 2 form: a+b*T+c/T^2
             case FF_Pol2J:
             case FF_Pol2C:
-                tau[i][j]=exp(-(pintParam[i][j][0]+pintParam[i][j][1]* *T+pintParam[i][j][2]/ *T)*RuTinv);//polynomial form 2
+                tau[i][j]=exp(-(pintParam[i][j][0]+pintParam[i][j][1]* *T+pintParam[i][j][2]/ (*T* *T))*RuTinv);
+                break;
+            case FF_Pol3K://polynomial 3 form: a+b/T+c*T
+            case FF_Pol3J:
+            case FF_Pol3C:
+                tau[i][j]=exp(-(pintParam[i][j][0]+pintParam[i][j][1]/ *T+pintParam[i][j][2]* *T)*RuTinv);
                 break;
             case FF_Ant3:
                 tau[i][j]=exp(pintParam[i][j][0]+pintParam[i][j][1]/ *T+pintParam[i][j][2]*log(*T)+
@@ -949,7 +957,7 @@ void CALLCONV FF_UNIFACDerivatives(FF_UnifacData *data, const double *T, const d
 
 
 //Calculates ln of activities and the derivatives of gE
-void CALLCONV FF_ActivityDerivatives(const int *actModel,const int *numSubs,const  FF_BaseProp baseProp[],const double pintParam[],const int *form,
+void CALLCONV FF_ActivityDerivatives(const int *actModel,const int *numSubs,const  FF_BaseProp baseProp[],const double pintParam[15][15][6],const int *form,
                                         const double *T,const double x[],FF_SubsActivityData actData[],FF_ExcessData *excData){
     int i,j;
     excData->gEC=0;excData->gESG=0;excData->gER=0;//Excess data for reduced G
@@ -993,7 +1001,7 @@ void CALLCONV FF_ActivityDerivatives(const int *actModel,const int *numSubs,cons
     gEplus=0;
     for (i=0;i<*numSubs;i++) gEplus=gEplus+x[i]*(actDataPlus[i].lnGammaC+actDataPlus[i].lnGammaSG+actDataPlus[i].lnGammaR);
     excData->dgE_dT=((gEplus)-(excData->gE))/(Tplus- *T);
-    //printf("hE:%f\n",-R* *T* *T* excData->dgE_dT);
+    //printf("hE:%f\n",-R* *T* excData->dgE_dT);
 }
 
 
