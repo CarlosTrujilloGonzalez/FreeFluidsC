@@ -52,7 +52,9 @@ extern "C"
 {
 #endif
 //Calculation of the minimum tangent plane distance and the corresponding composition
-EXP_IMP void CALLCONV FF_StabilityCheck(FF_PTXfeed *data,int *useOptimizer,double *tpd,double tpdX[]);
+EXP_IMP void CALLCONV FF_StabilityCheck(FF_FeedData *data,double *tpd,double tpdX[]);
+//Calculation of the minimum tangent plane distance and the corresponding composition, by simulated annealing
+void CALLCONV FF_StabilityCheckSA(FF_FeedData *data,double *tpd,double tpdX[]);
 
 //Mixture bubble temperature calculation, given P, comoposition, eos and mixing rule
 EXP_IMP void CALLCONV FF_BubbleT(FF_MixData *mix,const double *P,const double x[],const double *bTguess, double *bT,double y[],
@@ -71,15 +73,16 @@ EXP_IMP void CALLCONV FF_DewP(FF_MixData *mix,const double *T, const double y[],
 EXP_IMP void CALLCONV FF_PressureEnvelope(FF_MixData *mix,const double *T, const int *nPoints, double c[], double bP[],double y[],double dP[],double x[]);
 
 //VL flash calculation, given T, P, feed composition, eos and mixing rule
-EXP_IMP void CALLCONV FF_VLflashPT(FF_MixData *mix,const double *T,const double *P,const double f[],
+EXP_IMP void CALLCONV FF_TwoPhasesFlashPT(FF_MixData *mix,const double *T,const double *P,const double f[],
                                    double x[],double y[],double substPhiL[],double substPhiG[],double *beta);
-//Determines the Gibbs energy of 1 mol of a mix, given T,P,total composition and the part of it assigned to one phase
-EXP_IMP double CALLCONV FF_TwoPhasesGibbs(unsigned nVar, const double coef[], double grad[], FF_PTXfeed *data);
-//VL flash calculation, given T,P, composition, and thermo model to use. By global optimization of residual Gibbs energy
-EXP_IMP void CALLCONV FF_TwoPhasesFlashPTGO(FF_PTXfeed *data, double x[],double y[],double substPhiL[],double substPhiG[],double *beta);
-//void CALLCONV FF_VLflashPTGO();
 //Mixture VL flash, given P,T, composition, and thermo model to use. By global optimization simulated annealing of residual Gibbs energy
-void CALLCONV FF_TwoPhasesFlashPTSA(FF_PTXfeed *data, double x[],double y[],double substPhiL[],double substPhiG[],double *beta,double *Gr);
+EXP_IMP void CALLCONV FF_TwoPhasesFlashPTSA(FF_FeedData *data, double x[],double y[],double substPhiL[],double substPhiG[],double *beta,double *Gr);
+//Mixture 2 phases flash, given P,T, composition, and thermo model to use. By differential evolution global minimization of the reduced Gibbs energy
+void CALLCONV FF_TwoPhasesFlashPTDE(FF_FeedData *data, double x[],double y[],double substPhiB[],double substPhiA[],double *beta,double *Gr);
+
+//Mixture VL flash, given P,T, composition, and thermo model to use. By simulated annealing global optimization of the reduced Gibbs energy
+EXP_IMP void CALLCONV FF_ThreePhasesFlashPTSA(FF_FeedData *data, double x[],double y[],double z[],double substPhiA[],double substPhiB[],double substPhiC[],
+                                      double *betaA,double *betaB,double *Gr);
 #ifdef __cplusplus
 }
 #endif
