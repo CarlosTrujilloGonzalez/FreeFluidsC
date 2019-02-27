@@ -22,7 +22,6 @@ Version 1.1.4
 - A differential evolution global Gibbs energy minimization algorithm is now available for two phases flashes.
 
 
-
 Version 1.1.3
 
 - The multi-start Nelder-Mead algorithm, used for global Gibbs energy minimization in biphasic flash, has been replaced by a much more
