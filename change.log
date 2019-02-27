@@ -40,4 +40,18 @@ Version 1.1
 
 - Two phases flash by global optimizer added.
 
+=======
+Version 1.1.4
+- An improved simulation annealing algorithm is now used for both tangent plane, and global Gibbs energy, minimization. The algorithm stores the best result obtained at high temperatures and performs a final loop at low temperature to improve accuracy.
+- A differential evolution global Gibbs energy minimization algorithm is now available for two phases flashes.
+
+Version 1.1.3
+- The multi-start Nelder-Mead algorithm, used for global Gibbs energy minimization in biphasic flash, has been replaced for a much more efficient simulated anneling algorithm, with a final smoothing of the result by some loops of successive substituion.
+
+Version 1.1
+- All structures are now defined in the "FFbasic.h" file.
+- Stability check by Michelsen, and global optimizer, methodologies added.
+- Two phases flash, according to Michelsen methodology improved.
+- Two phases flash by global optimizer added.
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
 - Code cleaning and bugs correction.

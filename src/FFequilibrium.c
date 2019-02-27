@@ -174,6 +174,7 @@ void CALLCONV FF_StabilityCheck(FF_FeedData *data,double *tpd,double tpdX[]){
             FF_MixPhiEOS(data->mix,&data->T,&data->P,xTest,&option,substPhiE);
             testTPDE=0;
             for(i=0;i<nVar;i++) testTPDE=testTPDE+xTest[i]*(log(xTest[i]*substPhiE[i])-data->logSubstFugacity[i]);
+<<<<<<< HEAD
             }
         if(testTPDA<testTPDE){
             testTPD=testTPDA;
@@ -200,6 +201,34 @@ void CALLCONV FF_StabilityCheck(FF_FeedData *data,double *tpd,double tpdX[]){
             else{
                 xTest[i]=data->z[i]*substPhi[i]/substPhiTest[i];
             }
+=======
+            }
+        if(testTPDA<testTPDE){
+            testTPD=testTPDA;
+            for(i=0;i<nVar;i++) substPhiTest[i]=substPhiA[i];
+        }
+        else{
+            testTPD=testTPDE;
+            for(i=0;i<nVar;i++) substPhiTest[i]=substPhiE[i];
+        }
+        if(testTPD<*tpd){
+            *tpd=testTPD;
+            for(i=0;i<nVar;i++)tpdX[i]=xTest[i];
+        }
+    }
+    //Now another loops as liquid phase   
+    for(j=0;j<8;j++){
+        xTotal=0;
+        for (i=0;i<nVar;i++){
+            if(j==0){
+                //Probably it is necessary a better initialization for LLE
+                k[i]=exp(log(data->mix->baseProp[i].Pc/ data->P)+5.373*(1-data->mix->baseProp[i].w)*(1-data->mix->baseProp[i].Tc/ data->T));
+                xTest[i]=data->z[i]*k[i];
+            }
+            else{
+                xTest[i]=data->z[i]*substPhi[i]/substPhiTest[i];
+            }
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
             xTotal=xTotal+xTest[i];
         }
         for(i=0;i<nVar;i++)xTest[i]=xTest[i]/xTotal;//normalization of xTest[i]
@@ -2180,6 +2209,7 @@ void CALLCONV FF_TwoPhasesFlashPT(FF_MixData *mix,const double *T,const double *
     //printf("Arrived to flash\n");
     *beta=HUGE_VALF;
 
+<<<<<<< HEAD
     if(mix->thModelActEos==2){//gamma-gamma. LLE. A modified Trebble(1989) method is used for k initialization.
         FF_PhiAndActivity(mix,T,P,f,actData,substPhiF);//one phase is assumed equal to feed
         yTotal=0;
@@ -2198,6 +2228,15 @@ void CALLCONV FF_TwoPhasesFlashPT(FF_MixData *mix,const double *T,const double *
         }
     }
     else if(mix->thModelActEos==0){//gamma-phi. Almost sure VLE
+=======
+    if(mix->thModelActEos==2){//gamma-gamma
+        FF_Activity(mix,T,f,actData);
+        for(i=0;i<mix->numSubs;i++){
+            kInit[i]=actData[i].gamma;
+        }
+    }
+    else if(mix->thModelActEos==0){//gamma-phi
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
         //printf("Activity model\n");
         //Perhaps this alternative can be avoided and unify with the phi-phi approach for kInit, using the gas EOS
         if (mix->mixRule==FF_VdW) mix->mixRule=FF_VdWnoInt;//The BIP are for the activity model, not for the EOS
@@ -2270,7 +2309,11 @@ void CALLCONV FF_TwoPhasesFlashPT(FF_MixData *mix,const double *T,const double *
             tpdg=tpdg+y[i]*(log(y[i])+log(substPhiG[i])-logFeedFugacity[i]);
         }
         tpd=(1-a)*tpdl+a*tpdg;
+<<<<<<< HEAD
         //printf("a:%f tpdl:%f tpdg:%f tpd:%f\n",a,tpdl,tpdg,tpd);
+=======
+        //printf("tpdl: %f tpdg: %f tpd: %f\n",tpdl,tpdg,tpd);
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
         if(tpd<0){
             *beta=a;
             return;
@@ -2369,7 +2412,11 @@ void CALLCONV FF_TwoPhasesFlashPTSA(FF_FeedData *data, double x[],double y[],dou
     p1=0.6;//Maximum probability of acceptance wanted//0.6
     p2=0.4;//Minimum probability of acceptance wanted//0.4
     GrLast=1e6;
+<<<<<<< HEAD
     GrBest=1e6;
+=======
+
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
     srand(time(NULL));
     T=T0;
     for(i=0;i<nVar;i++){//Initialization of both phases at feed composition, and the step vector
@@ -2551,6 +2598,7 @@ void CALLCONV FF_TwoPhasesFlashPTDE(FF_FeedData *data, double x[],double y[],dou
         }
     }
     //for(j=0;j<nPop;j++) printf("pop[%i] n[0]:%f n[1]:%f\n",j,actPop[j][0],actPop[j][1]);
+<<<<<<< HEAD
 
     //Calculation of Gibbs energy for the initial population
     for(j=0;j<nPop;j++){
@@ -2613,6 +2661,70 @@ void CALLCONV FF_TwoPhasesFlashPTDE(FF_FeedData *data, double x[],double y[],dou
             best=j;
             gBest=g[j];
         }
+=======
+
+    //Calculation of Gibbs energy for the initial population
+    for(j=0;j<nPop;j++){
+        aTotal=0;
+        for(i=0;i<nVar;i++) aTotal=aTotal+actPop[j][i];//count of the number of moles in the fraction A of element j
+        bTotal=1-aTotal;//number of moles in fraction 2
+        dif=0;
+        for(i=0;i<nVar;i++){//We convert the mole number to fraction
+            yTest[i]=actPop[j][i]/aTotal;//Normalization of the liquid phase to test
+            xTest[i]=(data->z[i]-actPop[j][i])/bTotal;
+            dif=dif+fabs(x[i]-y[i]);
+        }
+        if(data->mix->thModelActEos!=2){//Si no se usa gamma-gamma (LLE), la fase A se calcula mediante eos
+            optionA='s';
+            FF_MixVfromTPeos(data->mix,&data->T,&data->P,yTest,&optionA,answerL,answerG,&state);
+            if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
+                optionA='l';
+                Va=answerL[0];
+            }
+            else if((state=='G')||(state=='g')){
+                optionA='g';
+                Va=answerG[0];
+            }
+            else g[j]=1e6;
+
+        }
+        if(data->mix->thModelActEos==1){//phi-phi. La fase B se calcula mediante EOS
+            optionB='s';
+            FF_MixVfromTPeos(data->mix,&data->T,&data->P,xTest,&optionB,answerL,answerG,&state);
+            if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
+                optionB='l';
+                Vb=answerL[0];
+            }
+            else if((state=='G')||(state=='g')){
+                optionB='g';
+                Vb=answerG[0];
+            }
+            else g[j]=1e6;
+        }
+
+        if((dif>0.02*nVar)||((data->mix->thModelActEos==1)&&(fabs(Va-Vb)/Va)>0.05)){
+            if(data->mix->thModelActEos==2){//LLE mediante gamma-gamma. No hay fase gas
+                //printf("2 gamma-gamma \n");
+                FF_PhiAndActivity(data->mix,&data->T,&data->P,yTest,actDataA,substPhiA);
+            }
+            else FF_MixPhiEOS(data->mix,&data->T,&data->P,yTest,&optionA,substPhiA);
+
+            if(data->mix->thModelActEos==1) FF_MixPhiEOS(data->mix,&data->T,&data->P,xTest,&optionB,substPhiB);
+            else{//gamma-phi o gamma-gamma. Calculo mediante actividad
+                //printf("2 actibity\n");
+                FF_PhiAndActivity(data->mix,&data->T,&data->P,xTest,actDataB,substPhiB);
+            }
+            g[j]=0;//Residual Gibbs energy
+            for(i=0;i<nVar;i++){
+                g[j]=g[j]+bTotal*xTest[i]*(log(xTest[i]*substPhiB[i]))+aTotal*yTest[i]*(log(yTest[i]*substPhiA[i]));
+            }
+        }
+        //printf("actPop:%i Gas fract.:%f y[0]:%f y[1]:%f x[0]:%f x[1]:%f Gr:%f\n",j,aTotal,yTest[0],yTest[1],xTest[0],xTest[1],g[j]);
+        if(g[j]<gBest){
+            best=j;
+            gBest=g[j];
+        }
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
     }
     //printf("best element:%i g:%f\n",best,gBest);
 
@@ -2755,6 +2867,7 @@ void CALLCONV FF_TwoPhasesFlashPH(FF_FeedData *data, FF_PhaseThermoProp phase[2]
     }
     FF_MixThermoEOS(data->mix,refT,refP,&phase[0]);
     Hhigh=phase[0].H;
+<<<<<<< HEAD
 
     for(j=0;j<10;j++){//Regula falsi loops to bracket the T solution
         phase[0].T=Tlow+(data->H-Hlow)*(Thigh-Tlow)/(Hhigh-Hlow);
@@ -2790,6 +2903,43 @@ void CALLCONV FF_TwoPhasesFlashPH(FF_FeedData *data, FF_PhaseThermoProp phase[2]
 
     }
 
+=======
+
+    for(j=0;j<10;j++){//Regula falsi loops to bracket the T solution
+        phase[0].T=Tlow+(data->H-Hlow)*(Thigh-Tlow)/(Hhigh-Hlow);
+        FF_MixVfromTPeos(data->mix,&phase[0].T,&data->P,data->z,&option,answerL,answerG,state);
+        if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
+            phase[0].V=answerL[0];
+        }
+        else if((state=='G')||(state=='g')){
+            phase[0].V=answerG[0];
+        }
+        FF_MixThermoEOS(data->mix,refT,refP,&phase[0]);
+        if(fabs(phase[0].H-data->H)<0.001){//We have the solution in just one phase. Finish
+            return;
+        }
+        else{
+            if(phase[0].H>data->H) Thigh=phase[0].T;
+            else Tlow=phase[0].T;
+        }
+        if((Thigh-Tlow)<0.01) break;//We have arrived to the discontinuity due to change of phase, and the solution will be biphasic
+    }
+
+    for(j=0;j<10;j++){
+        FF_TwoPhasesFlashPT(data->mix,&phase[0].T,&data->P,data->z,phase[1].c,phase[0].c,phase[1].subsPhi,phase[0].subsPhi,&phase[0].fraction);
+        FF_MixVfromTPeos(data->mix,&phase[0].T,&data->P,phase[0].c,&option,answerL,answerG,state);
+        if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
+            phase[0].V=answerL[0];
+        }
+        else if((state=='G')||(state=='g')){
+            phase[0].V=answerG[0];
+        }
+        FF_MixThermoEOS(data->mix,refT,refP,&phase[0]);
+        Tplus=phase[0].T+0.01;
+
+    }
+
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
 
 
 }
@@ -2801,14 +2951,24 @@ void CALLCONV FF_ThreePhasesFlashPTSA(FF_FeedData *data, double x[],double y[],d
     printf("3 phases flash\n");
     int nSubs,nVar,i,j,k,l,m;
     int na;//number of accepted points
+<<<<<<< HEAD
     int ns=30;//number of cycles before step adjustement
     int nt=10;//number of iterations before temperature is reduced
     int ne=5;//number of temperature reductions
+=======
+    int ns=20;//number of cycles before step adjustement
+    int nt=5;//number of iterations before temperature is reduced
+    int ne=4;//number of temperature reductions
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
     float r;//randon value between 0 and 1
     float rm;//randon value between 0 and 1
     nSubs=data->mix->numSubs;
     nVar=nSubs*2;
+<<<<<<< HEAD
     double a[nSubs],b[nSubs],c[nSubs],aTotal,bTotal,cTotal,GrBest,aBest[nVar],fractBest[nVar];//Number of moles of each substance(and its total) in each phase
+=======
+    double a[nSubs],b[nSubs],c[nSubs],aTotal,bTotal,cTotal;//Number of moles of each substance(and its total) in each phase
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
     double fract[nSubs],answerL[3],answerG[3],difA,difB,difC,Va,Vb,Vc,GrLast,vLast;
     double step;//step vector for next composition calculation
     double T0=5/(R*data->T);//Initial temperature
@@ -2816,7 +2976,10 @@ void CALLCONV FF_ThreePhasesFlashPTSA(FF_FeedData *data, double x[],double y[],d
     double accept,stepCorr,p1,p2;//p1 and p2 are the maximum and minimum accept rate desired
     char optionA,optionB,optionC,state;
     GrLast=1e6;
+<<<<<<< HEAD
     GrBest=1e6;
+=======
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
     p1=0.3;
     p2=0.2;
 
@@ -2831,14 +2994,22 @@ void CALLCONV FF_ThreePhasesFlashPTSA(FF_FeedData *data, double x[],double y[],d
         aTotal=aTotal+a[i];
         bTotal=bTotal+b[i];
         cTotal=cTotal+c[i];
+<<<<<<< HEAD
         printf("Initial: a[%i]:%f fract[%i]:%f b[%i]:%f c[%i]:%f\n",i,a[i],i,fract[i],i,b[i],i,c[i]);
     }
     step=1.0;
     printf("Initial: aTotal:%f bTotal:%f cTotal:%f\n",aTotal,bTotal,cTotal);
+=======
+        //printf("a[%i]:%f fract[%i]:%f b[%i]:%f c[%i]:%f\n",i,a[i],i,fract[i],i,b[i],i,c[i]);
+    }
+    step=1.0;
+    printf("aTotal:%f bTotal:%f cTotal:%f\n",aTotal,bTotal,cTotal);
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
     for(i=0;i<nSubs;i++){
         x[i]=a[i]/aTotal;
         y[i]=b[i]/bTotal;
         z[i]=c[i]/cTotal;
+<<<<<<< HEAD
         printf("Initial: x[%i]:%f y[%i]:%f z[%i]:%f\n",i,x[i],i,y[i],i,z[i]);
     }
     for(m=0;m<ne;m++){//Loops decreasing T
@@ -2848,6 +3019,16 @@ void CALLCONV FF_ThreePhasesFlashPTSA(FF_FeedData *data, double x[],double y[],d
             for(k=0;k<ns;k++){//loops at fixed step vector
                 r=(float) 2*rand()/RAND_MAX-1;//random number between -1 and 1
                 printf("Random:%f\n",r);
+=======
+        //printf("x[%i]:%f y[%i]:%f z[%i]:%f\n",i,x[i],i,y[i],i,z[i]);
+    }
+    for(m=0;m<ne;m++){
+        for(l=0;l<nt;l++){//loops at fixed T
+            na=0;//number of accepted points
+            for(k=0;k<ns;k++){//loops at fixed step vector
+                r=(float) 2*rand()/RAND_MAX-1;//random number between -1 and 1
+                //printf("Random:%f\n",r);
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
                 for(j=0;j<nVar;j++){//loop along composition
                     if(j<nSubs){//If we change the composition of A phase
                         vLast=a[j];//save the actual value
@@ -2856,7 +3037,11 @@ void CALLCONV FF_ThreePhasesFlashPTSA(FF_FeedData *data, double x[],double y[],d
                         else a[j]=a[j]+r*step*a[j];
                         b[j]=(data->z[j]-a[j])*fract[j];
                         c[j]=data->z[j]-a[j]-b[j];
+<<<<<<< HEAD
                         printf("change A phase a[%i]:%f b[%i]:%f c[%i]:%f total:%f\n",j,a[j],j,b[j],j,c[j],a[j]+b[j]+c[j]);
+=======
+                        //printf("change A phase a[%i]:%f b[%i]:%f c[%i]:%f total:%f\n",j,a[j],j,b[j],j,c[j],a[j]+b[j]+c[j]);
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
                     }
                     else{//If we change the distribution between b and c phases
                         vLast=fract[j-nSubs];//save the actual value
@@ -2864,11 +3049,19 @@ void CALLCONV FF_ThreePhasesFlashPTSA(FF_FeedData *data, double x[],double y[],d
                         else fract[j-nSubs]=fract[j-nSubs]+r*step*fract[j-nSubs];
                         b[j-nSubs]=(data->z[j-nSubs]-a[j-nSubs])*fract[j-nSubs];
                         c[j-nSubs]=data->z[j-nSubs]-a[j-nSubs]-b[j-nSubs];
+<<<<<<< HEAD
                         printf("change ratio a[%i]:%f b[%i]:%f c[%i]:%f total:%f\n",j-nSubs,a[j-nSubs],j-nSubs,b[j-nSubs],j-nSubs,c[j-nSubs],a[j-nSubs]+b[j-nSubs]+c[j-nSubs]);
                     }
                     aTotal=bTotal=cTotal=0;
                     for(i=0;i<nSubs;i++){
                         aTotal=aTotal+a[i];//count of the number of moles in each fraction
+=======
+                        //printf("change ratio a[%i]:%f b[%i]:%f c[%i]:%f total:%f\n",j-nSubs,a[j-nSubs],j-nSubs,b[j-nSubs],j-nSubs,c[j-nSubs],a[j-nSubs]+b[j-nSubs]+c[j-nSubs]);
+                    }
+                    aTotal=bTotal=cTotal=0;
+                    for(i=0;i<nSubs;i++){
+                        aTotal=aTotal+a[i];//count of the number of moles in the fraction 1
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
                         bTotal=bTotal+b[i];
                         cTotal=cTotal+c[i];
                     }
@@ -2876,12 +3069,20 @@ void CALLCONV FF_ThreePhasesFlashPTSA(FF_FeedData *data, double x[],double y[],d
                     difA=0;
                     difB=0;
                     difC=0;
+<<<<<<< HEAD
                     for(i=0;i<nSubs;i++){//We convert the mole number to mole fraction
+=======
+                    for(i=0;i<nSubs;i++){//We convert the mole number to fraction
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
                         x[i]=a[i]/aTotal;//Normalization of the liquid phase to test
                         y[i]=b[i]/bTotal;
                         z[i]=c[i]/cTotal;
                         difA=difA+fabs(x[i]-y[i]);
+<<<<<<< HEAD
                         difB=difB+fabs(x[i]-z[i]);
+=======
+                        difA=difB+fabs(x[i]-z[i]);
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
                         difC=difC+fabs(y[i]-z[i]);
                     }
                     //printf("aTotal:%f bTotal:%f cTotal:%f TOTAL:%f x[0]:%f x[1]:%f y[0]:%f y[1]:%f z[0]:%f z[1]:%f\n",aTotal,bTotal,cTotal,aTotal+bTotal+cTotal,x[0],x[1],y[0],y[1],z[0],z[1]);
@@ -2958,6 +3159,7 @@ void CALLCONV FF_ThreePhasesFlashPTSA(FF_FeedData *data, double x[],double y[],d
                         printf("state:%c Va:%f Vb:%f Vc:%f\n",state,Va,Vb,Vc);
                         printf("B Afract:%f Bfract:%f Cfract:%f TOTAL:%f x[0]:%f y[0]:%f z[0]:%f Gr:%f\n",aTotal,bTotal,cTotal,aTotal+bTotal+cTotal,x[0],y[0],z[0],*Gr);
                         GrLast=*Gr;
+<<<<<<< HEAD
                         if(*Gr<GrBest){
                             GrBest=*Gr;
                             for(i=0;i<nVar;i++){
@@ -2965,12 +3167,18 @@ void CALLCONV FF_ThreePhasesFlashPTSA(FF_FeedData *data, double x[],double y[],d
                                 fractBest[i]=fract[i];
                             }
                         }
+=======
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
                         na=na+1;
                     }
                 }
             }
             accept=(double) na/(ns*nVar);
+<<<<<<< HEAD
             printf("accepted:%i tests:%i acceptance:%f\n",na,ns*nVar,accept);
+=======
+            //printf("accepted:%i tests:%i acceptance:%f\n",na,ns*nVar,accept);
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
             //printf("----------------------\n");
             if(accept>p1){
                 stepCorr=1+2*(accept-p1)/p2;
@@ -2986,6 +3194,7 @@ void CALLCONV FF_ThreePhasesFlashPTSA(FF_FeedData *data, double x[],double y[],d
                 //for(i=0;i<nVar;i++) step[i]=step[i]/stepCorr;
                 //printf("accept:%f stepCorr divis:%f\n",accept,stepCorr);
             }
+<<<<<<< HEAD
             if (step>1) step=1;
         }
         if(m==ne-2){
@@ -3000,6 +3209,10 @@ void CALLCONV FF_ThreePhasesFlashPTSA(FF_FeedData *data, double x[],double y[],d
         //printf("New T:%f\n",T);
         //printf("-------------------\n");
         /*T=T*0.85;*/
+=======
+        }
+        T=T*0.85;
+>>>>>>> c1e4dbf21d6ad7ccff9c5c51dbb9bd5f18783e2e
         //printf("New T:%f\n",T);
         //printf("-------------------\n");
     }
