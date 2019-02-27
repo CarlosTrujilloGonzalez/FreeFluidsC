@@ -80,6 +80,15 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_Subst
         mixData->unifNistData.FV[i]=mixData->baseProp[i].numMono*subsData[i]->baseProp.FV;
         mixData->cubicData[i]=subsData[i]->cubicData;
         mixData->saftData[i]=subsData[i]->saftData;
+        mixData->RI[i]=subsData[i]->RI;
+        mixData->cp0[i]=subsData[i]->cp0;
+        mixData->vp[i]=subsData[i]->vp;
+        mixData->hVsat[i]=subsData[i]->hVsat;
+        mixData->lCp[i]=subsData[i]->lCp;
+        mixData->lDens[i]=subsData[i]->lDens;
+        mixData->lVisc[i]=subsData[i]->lVisc;
+        mixData->lThC[i]=subsData[i]->lThC;
+        mixData->lSurfT[i]=subsData[i]->lSurfT;
         mixData->cp0Corr[i]=subsData[i]->cp0Corr;
         mixData->vpCorr[i]=subsData[i]->vpCorr;
         mixData->btCorr[i]=subsData[i]->btCorr;
@@ -89,6 +98,9 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_Subst
         mixData->lViscCorr[i]=subsData[i]->lViscCorr;
         mixData->lThCCorr[i]=subsData[i]->lThCCorr;
         mixData->lSurfTCorr[i]=subsData[i]->lSurfTCorr;
+        mixData->gDensCorr[i]=subsData[i]->gDensCorr;
+        mixData->gViscCorr[i]=subsData[i]->gViscCorr;
+        mixData->gThCCorr[i]=subsData[i]->gThCCorr;
         mixData->unifStdData.model=FF_UNIFACStd;
         mixData->unifPSRKData.model=FF_UNIFACPSRK;
         mixData->unifDortData.model=FF_UNIFACDort;
@@ -183,6 +195,14 @@ EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int *numSubs,FF_SubstanceData *
         mixData->unifNistData.FV[i]=mixData->baseProp[i].numMono*subsData[i]->baseProp.FV;
         mixData->cubicData[i]=subsData[i]->cubicData;
         mixData->saftData[i]=subsData[i]->saftData;
+        mixData->cp0[i]=subsData[i]->cp0;
+        mixData->vp[i]=subsData[i]->vp;
+        mixData->hVsat[i]=subsData[i]->hVsat;
+        mixData->lCp[i]=subsData[i]->lCp;
+        mixData->lDens[i]=subsData[i]->lDens;
+        mixData->lVisc[i]=subsData[i]->lVisc;
+        mixData->lThC[i]=subsData[i]->lThC;
+        mixData->lSurfT[i]=subsData[i]->lSurfT;
         mixData->cp0Corr[i]=subsData[i]->cp0Corr;
         mixData->vpCorr[i]=subsData[i]->vpCorr;
         mixData->btCorr[i]=subsData[i]->btCorr;
@@ -192,6 +212,9 @@ EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int *numSubs,FF_SubstanceData *
         mixData->lViscCorr[i]=subsData[i]->lViscCorr;
         mixData->lThCCorr[i]=subsData[i]->lThCCorr;
         mixData->lSurfTCorr[i]=subsData[i]->lSurfTCorr;
+        mixData->gDensCorr[i]=subsData[i]->gDensCorr;
+        mixData->gViscCorr[i]=subsData[i]->gViscCorr;
+        mixData->gThCCorr[i]=subsData[i]->gThCCorr;
 
         mixData->unifStdData.model=FF_UNIFACStd;
         mixData->unifPSRKData.model=FF_UNIFACPSRK;

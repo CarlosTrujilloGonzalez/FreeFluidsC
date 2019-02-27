@@ -828,7 +828,7 @@ void CALLCONV FF_PhiAndActivity(FF_MixData *mix,const double *T,const double *P,
             if(mix->baseProp[i].numMono<20){
                 FF_PhysPropCorr(&mix->vpCorr[i].form,mix->vpCorr[i].coef,&mix->baseProp[i].MW,&nPoints,T,&Vp);
                 if(mix->lDensCorr[i].form>0) FF_PhysPropCorr(&mix->lDensCorr[i].form,mix->lDensCorr[i].coef,&mix->baseProp[i].MW,&nPoints,T,&lDens);
-                else FF_LiqDensSatRackett(&mix->baseProp[i],&Tref,&rhoRef,&nPoints,T,&lDens);
+                else FF_LiqDensSatRackett(&mix->baseProp[i],&Tref,&rhoRef,T,&lDens);
               //printf("Vp:%f\n",Vp);
                 phi[i]=actData[i].gamma*Vp/ *P*exp(mix->baseProp[i].MW*0.001*(*P-Vp)/(lDens*R* *T));
             }
@@ -901,7 +901,7 @@ void CALLCONV FF_PhiFromActivity(FF_MixData *mix,const double *T,const double *P
                 if(mix->lDensCorr[i].form>0){
                     FF_PhysPropCorr(&mix->lDensCorr[i].form,mix->lDensCorr[i].coef,&mix->baseProp[i].MW,&nPoints,T,&lDens);
                 }
-                else FF_LiqDensSatRackett(&mix->baseProp[i],&Tref,&rhoRef,&nPoints,T,&lDens);
+                else FF_LiqDensSatRackett(&mix->baseProp[i],&Tref,&rhoRef,T,&lDens);
               //printf("Vp:%f\n",Vp);
                 phi[i]=actData[i].gamma*Vp/ *P*exp(mix->baseProp[i].MW*0.001*(*P-Vp)/(lDens*R* *T));
             }
