@@ -5,7 +5,7 @@
  *      Author: Carlos Trujillo
  *
  *This file is part of the "Free Fluids" application
- *Copyright (C) 2008-2018  Carlos Trujillo Gonzalez
+ *Copyright (C) 2008-2019  Carlos Trujillo Gonzalez
 
  *This program is free software; you can redistribute it and/or
  *modify it under the terms of the GNU General Public License version 3
@@ -82,11 +82,12 @@ enum FF_IntParamForm{FF_NoForm,FF_Pol1,FF_Pol1K,FF_Pol1J,FF_Pol1C,FF_Pol2,FF_Pol
 //In case the result contains energy, K,J,C indicates if the energy is expresed in K, Joules o Calories
 //Enumeration for units used in Flory-Huggins model
 enum FF_Units{FF_cal_cm3_05,FF_MPa_05};
+enum FF_SubstanceType{FF_Alkane,FF_Alkene,FF_Alkyne,FF_Cycloalkane,FF_Aromatic,FF_Water,FF_Alcohol,FF_Polyol,FF_Phenol,FF_Ether,FF_Aldehyde,FF_Ketone,FF_Acid,FF_Ester,FF_Amine,FF_Polymer};
 //Structures
 //----------
 //Basic properties for pure or pseudopure substances
-typedef struct {int id,type,numMono,unifacPSRKSubg[10][2],unifacDortSubg[10][2];double MW,MWmono,Tc,Pc,Vc,Zc,w,Zra,r,q,qRes,VdWV,Vliq,FV,mu,Q,Tb,Hildebrand,
-                HansenD,HansenP,HansenH;}FF_BaseProp;
+typedef struct {int id,type,numMono,unifacPSRKSubg[10][2],unifacDortSubg[10][2];double MW,MWmono,Tc,Pc,Vc,Zc,w,Zra,r,q,qRes,VdWV,Hf0g,Gf0g,S0g,
+                Pa,Vliq,FV,mu,Q,RadGyr,Tm,Hm,Tb,Hildebrand,HansenD,HansenP,HansenH;}FF_BaseProp;
 //Data for cubic EOS. Critical properties used are reported in order to better fix the EOS
 typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,VdWV,c,k1,k2,k3,k4;}FF_CubicEOSdata;
 //Cubic EOS parameters once given composition and T
@@ -103,7 +104,7 @@ typedef struct {double x,y;}FF_SinglePointData;
 
 //Data for a pure substance, including substructures for basic data, EOS and physical properties
 typedef struct {char name[30],CAS[22],description[150];int id,model,UnifStdSubg[20][2],UnifPSRKSubg[20][2],UnifDortSubg[20][2],UnifNistSubg[20][2];
-                double refT,refP;FF_BaseProp baseProp;FF_SinglePointData cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,gVisc,gThC,sDens,sCp;
+                double refT,refP;FF_BaseProp baseProp;FF_SinglePointData RI,cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,gVisc,gThC,sDens,sCp;
                 FF_CubicEOSdata cubicData;FF_SaftEOSdata saftData;FF_SWEOSdata swData;FF_Correlation cp0Corr,vpCorr,btCorr,hVsatCorr,lCpCorr,
                 lDensCorr,lViscCorr,lThCCorr,lSurfTCorr, gDensCorr,gViscCorr,gThCCorr,sDensCorr,sCpCorr;}FF_SubstanceData;
 
@@ -124,7 +125,7 @@ typedef struct{int numSubs,thModelActEos,actModel,refVpEos,eosType,mixRule;}FF_T
 //thModelActEos: 0(gamma-phi), 1(phi-phi), 2(gamma-gamma). If an  activity model is used for the liquid phase the BIP will be for this activity model.
 typedef struct {char name[30],description[150],subsName[15][30],CAS[15][22];int model,numSubs,thModelActEos,actModel,refVpEos,eosType,mixRule,intForm,id[15];
                 double refT,refP,intParam[15][15][6];FF_BaseProp baseProp[15];FF_UnifacData unifStdData,
-                unifPSRKData,unifDortData,unifNistData;FF_SinglePointData cp0[15],vp[15],hVsat[15],lCp[15],lDens[15],lVisc[15],lThC[15],lSurfT[15],
+                unifPSRKData,unifDortData,unifNistData;FF_SinglePointData RI[15],cp0[15],vp[15],hVsat[15],lCp[15],lDens[15],lVisc[15],lThC[15],lSurfT[15],
                 gVisc[15],gThC[15],sDens[15],sCp[15];FF_CubicEOSdata cubicData[15];FF_SaftEOSdata saftData[15];FF_SWEOSdata swData[15];
                 FF_Correlation cp0Corr[15],vpCorr[15],btCorr[15],hVsatCorr[15],lCpCorr[15],lDensCorr[15],lViscCorr[15],lThCCorr[15],lSurfTCorr[15],
                 gDensCorr[15],gViscCorr[15],gThCCorr[15],sDensCorr[15],sCpCorr[15];}FF_MixData;

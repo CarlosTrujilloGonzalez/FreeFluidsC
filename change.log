@@ -1,13 +1,43 @@
+Version 1.1.5
+- Modified the record FF_BaseProp, adding: Radius of gyration, Paracor, melting temperature and enthalpy, and ideal gas formation heats and entropy.
+ This makes the record incompatible with previous exportations.
+- Modified the record FF_SubstanceData adding data and temperature for refractive index.
+- Added pressure correction for liquid viscosity, according to Lucas method.
+- Added liquid viscosity of mixtures, according to Grunberg-Nissan and Teja-Rice methods.
+- Added liquid thermal conductivity prediction according to Latini's method.
+- Added liquid thermal conductivity for mixtures according to Li's method.
+- Added surface tension calculation for pure substances, according to McLeod-Sugden and Sastri-Rao methods.
+- Added surface tension calculation for mixtures, according to linear, Winterfeld and McLeod-Sugden methods.
+- Added gas viscosity prediction for pure substances according to Lucas method.
+- Added gas viscosity calculation for mixtures, according to Wilke method.
+- Added gas viscosity calculation for mixtures, according to Lucas method, including pressure correction.
+- Added gas thermal conductivity prediction, and pressure correction, both according to Chung's method.
+- Added low pressure thermal conductivity calculation for mixtures, according to Mason and Saxena methodology.
+
 Version 1.1.4
-- An improved simulation annealing algorithm is now used for both tangent plane, and global Gibbs energy, minimization. The algorithm stores the best result obtained at high temperatures and performs a final loop at low temperature to improve accuracy.
+
+- An improved simulation annealing algorithm is now used for both tangent plane, and global Gibbs energy, minimization.
+ The algorithm stores the best result obtained at high temperatures and performs a final loop at low temperature to improve accuracy.
+
 - A differential evolution global Gibbs energy minimization algorithm is now available for two phases flashes.
 
+
+
 Version 1.1.3
-- The multi-start Nelder-Mead algorithm, used for global Gibbs energy minimization in biphasic flash, has been replaced for a much more efficient simulated anneling algorithm, with a final smoothing of the result by some loops of successive substituion.
+
+- The multi-start Nelder-Mead algorithm, used for global Gibbs energy minimization in biphasic flash, has been replaced by a much more
+ efficient simulated anneling algorithm, with a final smoothing of the result by some loops of successive substituion.
+
+
 
 Version 1.1
+
 - All structures are now defined in the "FFbasic.h" file.
+
 - Stability check by Michelsen, and global optimizer, methodologies added.
+
 - Two phases flash, according to Michelsen methodology improved.
+
 - Two phases flash by global optimizer added.
+
 - Code cleaning and bugs correction.
