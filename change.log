@@ -1,3 +1,6 @@
+Version 1.1.6
+- Correction of a bad merge with Git
+
 Version 1.1.5
 - Modified the record FF_BaseProp, adding: Radius of gyration, Paracor, melting temperature and enthalpy, and ideal gas formation heats and entropy.
  This makes the record incompatible with previous exportations.
