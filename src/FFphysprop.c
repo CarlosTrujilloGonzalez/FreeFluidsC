@@ -39,7 +39,8 @@ void CALLCONV FF_CorrelationResult(const int *eq,const double coef[],const int *
     {
     case FF_DIPPR100://DIPPR-100. Polynomial a+b*T+c*T^2+d*T^3+e*T^4. Liquid density,heat capacity,thermal conductivity. Vapor viscosity. Ideal gas heat capacity.Dielectric constant
     case FF_DIPPR100Ld:
-        for (i=0;i<*nPoints;i++) y[i]=coef[0]+coef[1]*x[i]+coef[2]*pow(x[i],2)+coef[3]*pow(x[i],3)+coef[4]*pow(x[i],4);
+        //for (i=0;i<*nPoints;i++) y[i]=coef[0]+coef[1]*x[i]+coef[2]*pow(x[i],2)+coef[3]*pow(x[i],3)+coef[4]*pow(x[i],4);
+        for (i=0;i<*nPoints;i++) y[i]=coef[0]+x[i]*(coef[1]+x[i]*(coef[2]+x[i]*(coef[3]+x[i]*coef[4])));
         break;
     case FF_Polynomial://Polynomial a+b*T+c*T^2+d*T^3+e*T^4+f*T^5.Ideal gas heat capacity
         for (i=0;i<*nPoints;i++) y[i]=coef[0]+coef[1]*x[i]+coef[2]*pow(x[i],2)+coef[3]*pow(x[i],3)+coef[4]*pow(x[i],4)+coef[5]*pow(x[i],2);
@@ -101,6 +102,12 @@ void CALLCONV FF_CorrelationResult(const int *eq,const double coef[],const int *
         for (i=0;i<*nPoints;i++){
 
             y[i]=coef[4]*exp(coef[0]*pow((coef[2]-x[i])/(x[i]-coef[3]),0.33333)+coef[1]*pow((coef[2]-x[i])/(x[i]-coef[3]),1.33333));
+        }
+        break;
+    case FF_PPDS15://a/Tm+b+c*Tm+d*Tm^2+e*Tm^3
+        for (i=0;i<*nPoints;i++){
+            Tm=1-x[i]/coef[5];
+            y[i]=coef[0]/Tm+coef[1]+coef[2]*Tm+coef[3]*Tm*Tm+coef[4]*Tm*Tm*Tm;
         }
         break;
     case FF_Wilhoit://Wilhoit equation Cp0 J/mol·K (8 coefficients)
@@ -199,14 +206,21 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
     case 60://DIPPR 100 Liquid surface tension N/m
     case 63://DIPPR 100 Liquid surface tension dyna/cm
     case 70://DIPPR 100 Solid density in Kmol/m3
-    case 80://DIPPR 100 Solid Cp in J/Kmol·K
+    case 71://DIPPR 100 Solid density in kgr/m3
+    case 80://DIPPR 100 Solid Cp in J/(Kmol·K)
+    case 82://DIPPR 100 Solid Cp in J/(kgr·K)
     case 111://DIPPR100 Gas viscosity in Pa·s
     case 121://DIPPR100 Gas thermal conductivity in W/(m·K)
+    case 140://DIPPR100 T in K from liquid enthalpy in J/kgr
+    case 150://DIPPR100 Isothermal compressibility adimensional
         eq=FF_DIPPR100;
         break;
     case 10://Polynomial Cp0 en cal/(mol·K)
         eq=FF_Polynomial;
         //printf("Equation:%i\n",eq);
+        break;
+    case 130://Polynomial2 boil temp in K
+        eq=FF_Polynomial2;
         break;
     case 20://DIPPR101 Vp Pa
     case 21://DIPPR101 Vp KPa
@@ -276,6 +290,10 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
         break;
     case 37://PPDS9 in Pa·s
         eq=FF_PPDS9;
+        break;
+    case 19://PPDS15 Cp in J/kg·K
+    case 151://PPDS15 liquid isothermal compressibility adimensional
+        eq=FF_PPDS15;
         break;
     case 43://PCWIN liquid density in kgr/m3
         eq=FF_PCWIN;
@@ -350,6 +368,172 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
     }
     //Last we reconvert the input variable if necessary
     if ((*cor==22)||(*cor==63)||(*cor==240)) for (i=0;i<*nPoints;i++) x[i]=x[i]+273.15;
+}
+
+//Calculates specific enthalpy and entropy from a Cp correlation, with reference T=0 K
+void FF_SpecificEnthalpyEntropyCorr(int *cor,const double coef[],double *MW,const int *nPoints,double x[],double H[],double S[]){
+    int i;
+    switch (*cor){
+    case 1://DIPPR 100 Cp0 in KJ/kgr·K
+    case 2://DIPPR 100 Cp0in J/mol·K
+    case 6://DIPPR 100 Cp0 in J/kgr·K
+    case 15://DIPPR 100 Liquid Cp in J/mol·K
+    case 16://DIPPR 100 Liquid Cp in J/Kmol·K
+    case 17://DIPPR 100 Liquid Cp in J/kgr·K
+        for (i=0;i<*nPoints;i++){
+            H[i]=x[i]*(coef[0]+x[i]*(coef[1]/2+x[i]*(coef[2]/3+x[i]*(coef[3]/4+x[i]*coef[4]/5))));//This is the integration from Cp0
+            S[i]=coef[0]*log(x[i])+x[i]*(coef[1]+x[i]*(coef[2]/2+x[i]*(coef[3]/3+x[i]*coef[4]/4)));
+        }
+        break;
+    case 10://Polynomial a+b*T+c*T^2+d*T^3+e*T^4+f*T^5 Cp0 in cal/(mol·K)
+        for (i=0;i<*nPoints;i++){
+            H[i]=x[i]*(coef[0]+x[i]*(coef[1]/2+x[i]*(coef[2]/3+x[i]*(coef[3]/4+x[i]*(coef[4]/5+x[i]*coef[5]/6)))));//This is the integration from Cp0
+            S[i]=coef[0]*log(x[i])+x[i]*(coef[1]+x[i]*(coef[2]/2+x[i]*(coef[3]/3+x[i]*(coef[4]/4+x[i]*coef[5]/5))));
+        }
+
+        break;
+    case 3://DIPPR 107 correlation in calories/mol·K
+    case 4://DIPPR 107 correlation in J/Kmol·K
+        for (i=0;i<*nPoints;i++){
+            H[i]=coef[0]*x[i]+coef[1]*coef[2]*(1/tanh(coef[2]/x[i]))-coef[3]*coef[4]*tanh(coef[4]/x[i]);
+            S[i]=coef[0]*log(x[i])+coef[1]*(coef[2]/x[i]/tanh(coef[2]/x[i])-log(sinh(coef[2]/x[i])))-coef[3]*(coef[4]/x[i]*tanh(coef[4]/x[i])-log(cosh(coef[4]/x[i])));
+        }
+        break;
+    /*
+    case 9://ChemSep16 a + exp( b/T+ c + d*T + e*T^2 ) en J/Kmol·K. Integration is done numerically
+    case 18://ChemSep nº16 Liquid Cp in J/Kmol·K
+        int j=20;
+        double interval;
+        double T,Cp1,Cp2;
+        for (i=0;i<*nPoints;i++){
+            interval=x[i]/i;
+            Cp1=exp(coef[1]/ *refT+coef[2]+coef[3]* *refT+coef[4]*pow(*refT,2));
+            for (j=1;j<21;j++){
+                T=*refT+j*interval;
+                Cp2=exp(coef[1]/T+coef[2]+coef[3]*T+coef[4]*pow(T,2));
+                th0->H=th0->H+(Cp1+Cp2)/2*interval;
+                th0->S=th0->S+(Cp1+Cp2)/(T+T-interval)*interval;
+                Cp1=Cp2;
+                }
+        }
+        break;
+    */
+    case 5:{//Wilhoit equation J/mol·K (8 coefficients)
+        int j;
+        double y,y2,y4,h,a7_a6,a7_a6_2,a7_a6_4,x1,z,w,s;
+        a7_a6=coef[7]/coef[6];
+        a7_a6_2=a7_a6*a7_a6;
+        a7_a6_4=a7_a6_2*a7_a6_2;
+        x1=(coef[4]*coef[7]*coef[7] - coef[5])/(coef[6]*coef[6]);
+        for (i=0;i<*nPoints;i++){
+            if (x[i]<=coef[7]) y=0;
+            else y=(x[i]-coef[7])/(x[i]+coef[6]);
+            y2=y*y;
+            y4=y2*y2;
+            if (x[i]<=coef[7]) h=0;
+            else h=(coef[6]+coef[7])*((2*coef[3]+8*coef[4])*log(1-y)+ (coef[3]*(1+1/(1-y))+coef[4]*(7+1/(1-y)))*y+
+                    coef[4]*(3*y2+5*y*y2/3+y4+0.6*y4*y+y4*y2/3)+ (coef[4]-coef[5]/pow((coef[6]+coef[7]),2))*y4*y2*y/7);
+            H[i]= R*x[i]*(coef[0]+coef[1]*exp(-coef[2]/x[i])/(coef[2]*x[i]))+R*h;
+
+            if (x[i]<=coef[7]) s=0;
+            else{
+                z = x[i]*(coef[7] + coef[6])/((x[i] + coef[6])*coef[7]);
+                w=0;
+                for (j=1;j<8;j++) w=w+(x1*pow(-a7_a6,6-j) - coef[4])*pow(y,j)/j;
+                s=(coef[3] + ((coef[4]*coef[7]*coef[7]-coef[5])*a7_a6_4/(coef[6]*coef[6])))*a7_a6_2*log(z)+
+                    (coef[3] + coef[4])*log((x[i] + coef[6])/(coef[6] + coef[7]))-
+                    (coef[3]*(coef[6] + coef[7])/coef[6] + coef[5]*y4*y2/(7.*coef[7]*(coef[6] + coef[7])))*y+w;
+            }
+            S[i]=R*(coef[0]*log(x[i])+coef[1]*(1+coef[2]/x[i])*exp(-coef[2]/x[i])/(coef[2]*coef[2])+s);
+        }
+    }
+        break;
+    case 7:{//Cooper (11 coefficients used in IAPWS95 and CO2) plus potential term  (used in short fundamental equations with 11 coefficients also,lacks last exp terms)
+        int j;
+        for (i=0;i<*nPoints;i++){
+            /*
+            th0->Cp=coef[0]+coef[1]*pow(th0->T,coef[2]);
+            for (i=3;i<13;i=i+2){
+                if (coef[i]>0) th0->Cp=th0->Cp+coef[i]*pow((coef[i+1]/th0->T),2)*exp(coef[i+1]/th0->T)/pow((exp(coef[i+1]/th0->T)-1),2);
+            }
+            th0->Cp=th0->Cp*R;*/
+            H[i]=coef[0]*x[i]+coef[1]/(coef[2]+1)*pow(x[i],(coef[2]+1));
+            for (j=3;j<13;j=j+2) if (coef[j]>0) H[i]=H[i]+coef[j]*coef[j+1] / (exp(coef[j+1]/x[i])-1);
+            H[i]=H[i]*R;
+            if (coef[1]>0) S[i]=coef[0]*log(x[i])+coef[1]/coef[2]*pow(x[i],coef[2]);
+            else S[i]=coef[0]*log(x[i]);
+            //printf("T:%f S0(0):%f\n",x[i],S[i]*R/th0->MW);
+            for (j=3;j<13;j=j+2){
+                if (coef[j]>0) S[i]=S[i]+coef[j]*coef[j+1]*(exp(coef[j+1]/x[i])/(x[i]*(exp(coef[j+1]/x[i])-1))-
+                    log(exp(coef[j+1]/x[i])-1)/coef[j+1]);
+                //printf("S0(%i):%f\n",i,S[i]*R/th0->MW);
+            }
+            S[i]=S[i]*R;
+        }
+    }
+        break;
+    case 8:{//Jaeschke and Schley equation (9 coefficients). Used by GERG2004
+        int j;
+        for (i=0;i<*nPoints;i++){
+            H[i]=(1+coef[0])*x[i];
+            for (j=1;j<9;j=j+4) if (coef[j]>0) H[i]=H[i]+2*coef[j]*coef[j+1] / (exp(2*coef[j+1]/x[i])-1)+
+                    +2*coef[j+2]*coef[j+3] / (exp(2*coef[j+3]/x[i])+1);
+            H[i]=H[i]*R;
+            S[i]=(1+coef[0])*log(x[i]);
+            for (j=1;j<9;j=j+4) if (coef[j]>0) S[i]=S[i]+coef[j]*(coef[j+1]/x[i]/tanh(coef[j+1]/x[i])-log(sinh(coef[j+1]/x[i])))-coef[j+2]*(coef[j+3]/x[i]*tanh(coef[j+3]/x[i])-log(cosh(coef[j+3]/x[i])));
+            S[i]=S[i]*R;
+        }
+    }
+        break;
+    case 19:{//PPDS15 equation a/Tm+b+c*Tm+d*Tm^2+e*Tm^3 Cpl in J/(kgr·K)
+        double Tm,Tm2,Tc2;
+        Tc2=coef[5]*coef[5];
+        for (i=0;i<*nPoints;i++){
+            Tm=1-x[i]/coef[5];
+            Tm2=Tm*Tm;
+            H[i]=-coef[5]*(coef[0]*log(Tm)+coef[1]*Tm+0.5*coef[2]*Tm2+coef[3]*Tm2*Tm/3+0.25*coef[4]*Tm2*Tm2);
+            S[i]=-(6*Tc2*x[i]*(coef[2]+2*coef[3]+3*coef[4])-3*coef[5]*x[i]*x[i]*(3*coef[4]+coef[3])+2*x[i]*x[i]*x[i]*coef[4])/(6*Tc2*coef[5])+
+                    (coef[0]+coef[1]+coef[2]+coef[3]+coef[4])*log(x[i])-coef[0]*log(abs(x[i]-coef[5]));
+        }
+      }
+        break;
+
+    }
+    //now is necessary to pass to J/kg·K
+    switch (*cor){
+    case 1://DIPPR 100 Cp0 in KJ/kgr·K
+        for (i=0;i<*nPoints;i++){
+            H[i]=H[i]*1e3;
+            S[i]=S[i]*1e3;
+        }
+        break;
+    case 2://DIPPR 100 Cp0in J/mol·K
+    case 5://Wilhoit equation J/mol·K (8 coefficients)
+    case 7://Cooper J/mol·K (11 coefficients)
+    case 8://Jaeschke and Schley equation J/mol·K (9 coefficients)
+    case 15://DIPPR 100 Liquid Cp in J/mol·K
+        for (i=0;i<*nPoints;i++){
+            H[i]=H[i]*1e3/ *MW;
+            S[i]=S[i]*1e3/ *MW;
+        }
+        break;
+    case 4://DIPPR 107 correlation in J/Kmol·K
+    case 9://ChemSep16 a + exp( b/T+ c + d*T + e*T^2 ) en J/Kmol·K. Integration is done numerically
+    case 16://DIPPR 100 Liquid Cp in J/Kmol·K
+    case 18://ChemSep nº16 Liquid Cp in J/Kmol·K
+        for (i=0;i<*nPoints;i++){
+            H[i]=H[i]/ *MW;
+            S[i]=S[i]/ *MW;
+        }
+        break;
+    case 3://DIPPR 107 correlation in calories/mol·K
+    case 10://Polynomial a+b*T+c*T^2+d*T^3+e*T^4+f*T^5 Cp0 in cal/(mol·K)
+        for (i=0;i<*nPoints;i++){
+            H[i]=H[i]*4.1868*1e3/ *MW;
+            S[i]=S[i]*4.1868*1e3/ *MW;
+        }
+        break;
+    }
 }
 
 //Vapor pressure related calculations
@@ -1100,7 +1284,7 @@ void CALLCONV FF_GasThCondTV(double *T,double *V,FF_SubstanceData *data,double *
 }
 
 //Thermal conductivity of low pressure gas mixtures. Mason and Saxena method
-//Correction for high prressure in Chemsep book
+//Correction for high pressure in Chemsep book
 void CALLCONV FF_MixLpGasThCondTpMason(FF_MixData *mix,double *T,double y[],double *gThCond){
     int i,j,nPoints=1;
     double sGthCond[mix->numSubs],Cp0,Gamma[mix->numSubs],ratio,Tr[mix->numSubs],A[mix->numSubs][mix->numSubs],sigma;
