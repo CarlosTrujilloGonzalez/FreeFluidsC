@@ -1,7 +1,7 @@
 /*
  * FFbasic.h
  *
- *  Created on: 11/03/2018
+ *  Created on: 11/03/2019
  *      Author: Carlos Trujillo
  *
  *This file is part of the "Free Fluids" application
@@ -67,7 +67,7 @@ enum FF_MixingRule{FF_NoMixRul,FF_VdW,FF_PR,FF_MKP,FF_HV,FF_MHV1,FF_PSRK,FF_HVOS
 enum FF_CorrEquation{FF_DIPPR100,FF_Polynomial,FF_Polynomial2,FF_DIPPR100Ld,FF_expDIPPR100,FF_DIPPR101,FF_DIPPR101Vp,FF_DIPPR101Lv,FF_logDIPPR101,
                   FF_DIPPR102,FF_DIPPR103,FF_DIPPR104,FF_DIPPR105,FF_DIPPR106,FF_DIPPR106Hv,FF_DIPPR106Ld,FF_DIPPR106SurfT,FF_DIPPR107,
                   FF_DIPPR107Cp,FF_DIPPR114,FF_DIPPR115,FF_DIPPR116,FF_DIPPR116Ld,FF_Wilhoit,FF_Cooper,FF_Jaechske,FF_ChemSep16,FF_Antoine1,
-                  FF_Antoine2,FF_Wagner25,FF_Wagner36,FF_PPDS9,FF_PPDS10,FF_PCWIN,FF_Rackett,FF_ExtAndrade1,FF_ExtAndrade2,FF_ChericVisc,FF_WagnerGd,FF_Tait,FF_ExtWagner};
+                  FF_Antoine2,FF_Wagner25,FF_Wagner36,FF_PPDS9,FF_PPDS10,FF_PCWIN,FF_Rackett,FF_ExtAndrade1,FF_ExtAndrade2,FF_ChericVisc,FF_WagnerGd,FF_Tait,FF_ExtWagner,FF_PPDS15};
 
 enum FF_ActModel{FF_NoModel,FF_Wilson,FF_NRTL,FF_UNIQUAC,FF_UNIQUACFV,FF_UNIFACStd,FF_UNIFACPSRK,FF_UNIFACDort,FF_UNIFACNist,FF_EntropicFV,FF_UNIFACZM,
                  FF_Hildebrand,FF_Hansen,FF_Chi};
@@ -83,6 +83,7 @@ enum FF_IntParamForm{FF_NoForm,FF_Pol1,FF_Pol1K,FF_Pol1J,FF_Pol1C,FF_Pol2,FF_Pol
 //Enumeration for units used in Flory-Huggins model
 enum FF_Units{FF_cal_cm3_05,FF_MPa_05};
 enum FF_SubstanceType{FF_Alkane,FF_Alkene,FF_Alkyne,FF_Cycloalkane,FF_Aromatic,FF_Water,FF_Alcohol,FF_Polyol,FF_Phenol,FF_Ether,FF_Aldehyde,FF_Ketone,FF_Acid,FF_Ester,FF_Amine,FF_Polymer};
+
 //Structures
 //----------
 //Basic properties for pure or pseudopure substances
@@ -102,11 +103,12 @@ typedef struct {int id,form;double coef[14],limI,limS;}FF_Correlation;
 //Data for single physical property
 typedef struct {double x,y;}FF_SinglePointData;
 
+
 //Data for a pure substance, including substructures for basic data, EOS and physical properties
 typedef struct {char name[30],CAS[22],description[150];int id,model,UnifStdSubg[20][2],UnifPSRKSubg[20][2],UnifDortSubg[20][2],UnifNistSubg[20][2];
-                double refT,refP;FF_BaseProp baseProp;FF_SinglePointData RI,cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,gVisc,gThC,sDens,sCp;
+                double refT,refP;FF_BaseProp baseProp;FF_SinglePointData RI,cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,lIsothComp,gVisc,gThC,sDens,sCp;
                 FF_CubicEOSdata cubicData;FF_SaftEOSdata saftData;FF_SWEOSdata swData;FF_Correlation cp0Corr,vpCorr,btCorr,hVsatCorr,lCpCorr,
-                lDensCorr,lViscCorr,lThCCorr,lSurfTCorr, gDensCorr,gViscCorr,gThCCorr,sDensCorr,sCpCorr;}FF_SubstanceData;
+                lTfromHCorr,lDensCorr,lViscCorr,lThCCorr,lSurfTCorr,lIsothCompCorr,gDensCorr,gTfromDcorr,gViscCorr,gThCCorr,sDensCorr,sCpCorr;}FF_SubstanceData;
 
 //UNIFAC data for a mixture. Used to speed-up calculations
 //Prepared for 20 substances and 30 subgroups. FV must be filled with the free volume of each substance if EntropicFV model is to be used

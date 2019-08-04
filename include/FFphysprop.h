@@ -55,6 +55,9 @@ EXP_IMP void CALLCONV FF_CorrelationResult(const int *eq,const double coef[],con
 //Calculates the result of the given physical property in SI units
 EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const double *MW,const int *nPoints,double x[],double y[]);
 
+//Calculates specific enthalpy and entropy from a Cp correlation, with reference T=0 K
+void FF_SpecificEnthalpyEntropyCorr(int *cor,const double coef[],double *MW,const int *nPoints,double x[],double H[],double S[]);
+
 //Vapor pressure related calculations
 //-----------------------------------
 //Acentric factor calculation by the definition equation

@@ -1,3 +1,9 @@
+Version 1.2.0
+- Added PPDS15 to the correlarion equations.
+- Added liquid isothermal compressibility to the FF_SubstanceData structure.
+- New function for enthalpy and entropy calculation from a Cp correlation.
+- Solved bugs in the enthalpy calculation using Wilhoit and Cooper equations.
+
 Version 1.1.6
 - Correction of a bad merge with Git
 

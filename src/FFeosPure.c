@@ -419,7 +419,7 @@ void CALLCONV FF_VfromTPcubic(const double *T,const double *P,const  FF_CubicPar
 }
 
 
-void CALLCONV FF_ArrDerCubic(const double *T,const double *V,const  FF_CubicParam *param,double result[6])
+void CALLCONV FF_ArrDerCubicOld(const double *T,const double *V,const  FF_CubicParam *param,double result[6])//replaced by next one,faster calculation
 {
     double ub=param->u*param->b;
     double wb=param->w*param->b;
@@ -430,6 +430,21 @@ void CALLCONV FF_ArrDerCubic(const double *T,const double *V,const  FF_CubicPara
     result[2]=-1/pow(*V,2)+1/pow(Veos-param->b,2)-param->Theta * (Veos * 2+ub+wb)/(R * *T *pow(Veos+ub,2)*pow(Veos+wb,2));//d2Arr/dV2
     result[3]=log((Veos+ub)/(Veos+wb))*(*T * param->dTheta-param->Theta)/(R*param->b*(param->w-param->u)*T2);//dArr/dT
     result[4]=log((Veos+ub)/(Veos+wb))* (param->d2Theta*T2-2*(*T * param->dTheta-param->Theta))/(R*param->b*(param->w-param->u)*T2* *T);//d2Arr/dT2
+    result[5]=(*T * param->dTheta-param->Theta)/(R*T2*(Veos+ub)*(Veos+wb));//d2Arr/dVdT
+}
+
+void CALLCONV FF_ArrDerCubic(const double *T,const double *V,const  FF_CubicParam *param,double result[6])
+{
+    double ub=param->u*param->b;
+    double wb=param->w*param->b;
+    double Veos=*V+param->c;
+    double T2=*T * *T;
+    double logA=log((Veos+ub)/(Veos+wb));
+    result[0]=param->Theta/(param->b*R* *T*(param->w-param->u))*logA+log(*V/(Veos-param->b));//This is Arr
+    result[1]=1/ *V- 1/(Veos-param->b)+param->Theta/(R * *T * (Veos + ub)*(Veos + wb));//dArr/dV
+    result[2]=-1/pow(*V,2)+1/pow(Veos-param->b,2)-param->Theta * (Veos * 2+ub+wb)/(R * *T *pow(Veos+ub,2)*pow(Veos+wb,2));//d2Arr/dV2
+    result[3]=logA*(*T * param->dTheta-param->Theta)/(R*param->b*(param->w-param->u)*T2);//dArr/dT
+    result[4]=logA* (param->d2Theta*T2-2*(*T * param->dTheta-param->Theta))/(R*param->b*(param->w-param->u)*T2* *T);//d2Arr/dT2
     result[5]=(*T * param->dTheta-param->Theta)/(R*T2*(Veos+ub)*(Veos+wb));//d2Arr/dVdT
 }
 
@@ -2073,6 +2088,7 @@ void CALLCONV FF_VpEOS(const int *eosType,const double *T,const void *data,doubl
     double phiMaxError;
     double Tc,Pc,w;
     int i;
+    //printf("Eos type:%i\n",*eosType);
     switch (*eosType)
     {
         case FF_SAFTtype:
@@ -2108,6 +2124,7 @@ void CALLCONV FF_VpEOS(const int *eosType,const double *T,const void *data,doubl
             Pc=(( FF_SWEOSdata*)data)->Pc;
             w=(( FF_SWEOSdata*)data)->w;
             phiMaxError=0.001;
+            //printf("EOS:%i\n",(( FF_SWEOSdata*)data)->eos);
             break;
         //case FF_PRPOL1:
             //Tc=1000;
@@ -2128,7 +2145,7 @@ void CALLCONV FF_VpEOS(const int *eosType,const double *T,const void *data,doubl
             break;
         }
     }
-    if (((*T>=Tc)&&(!(Tc==0)))||((*T>0.999*Tc)&&(*eosType==FF_SW)))//If T> supplied Tc no calculation is made
+    if (((*T>=Tc)&&(!(Tc==0)))||((*T>0.999*Tc)&&(*eosType==FF_SWtype)))//If T> supplied Tc no calculation is made
     {
         *Vp=+HUGE_VALF;
         //printf("T:%f Tc:%f\n",*T,Tc);
@@ -2152,10 +2169,13 @@ void CALLCONV FF_VpEOS(const int *eosType,const double *T,const void *data,doubl
         //printf("Initial Vp guess:%f\n",P);
         FF_VfromTPeos(eosType,T,&P,data,&option,answerL,answerG,&state);
         //printf("T:%f P:%f  Vl:%f  Zl:%f  Vg:%f  Zg:%f state:%c\n",*T,P,answerL[0],answerL[2],answerG[0],answerG[2],state);
+
         while (!((state=='L')||(state=='G')||(state=='E')))//Till we find a pressure with different possitive liquid and gas solutions
         {
-            if ((state=='g')||(answerL[2]>0.4))P=P+Pc/i;
-            else if ((state=='l')||(answerL[2]<0.2))P=P-Pc/i;
+
+
+            if ((state=='g')||(answerL[2]>0.3))P=P+Pc/i;
+            else if ((state=='l')||(answerL[2]<0.3))P=P-Pc/i;
             else//If we have found only one result from both sides but state is not known, or none
             {
                 P=P+Pc/i;//we go up
@@ -2182,7 +2202,12 @@ void CALLCONV FF_VpEOS(const int *eosType,const double *T,const void *data,doubl
 
             }
 
+
+
+
             FF_VfromTPeos(eosType,T,&P,data,&option,answerL,answerG,&state);
+
+
             i=i*2;
             n=n+1;
             //printf("Finding two phases n:%i i:%i P:%f  Vl:%f  Zl:%f  Vg%f  Zg%f\n",n,i/2,P,answerL[0],answerL[2],answerG[0],answerG[2]);
@@ -2316,7 +2341,7 @@ void CALLCONV FF_IdealThermoEOS(const int *equation,const double coef[],double *
             if (*refT<=coef[7]) h=0;
             else h=(coef[6]+coef[7])*((2*coef[3]+8*coef[4])*log(1-y)+ (coef[3]*(1+1/(1-y))+coef[4]*(7+1/(1-y)))*y+
                     coef[4]*(3*y2+5*y*y2/3+y4+0.6*y4*y+y4*y2/3)+ (coef[4]-coef[5]/pow((coef[6]+coef[7]),2))*y4*y2*y/7);
-            th0->H=th0->H-R* *refT*(coef[0]+coef[1]*exp(-coef[2]/ *refT)/(coef[2]*th0->T))-R*h;
+            th0->H=th0->H-R* *refT*(coef[0]+coef[1]*exp(-coef[2]/ *refT)/(coef[2]* *refT))-R*h;
 
             if (*refT<=coef[7]) s=0;
             else{
@@ -2336,7 +2361,7 @@ void CALLCONV FF_IdealThermoEOS(const int *equation,const double coef[],double *
                 if (coef[i]>0) th0->Cp=th0->Cp+coef[i]*pow((coef[i+1]/th0->T),2)*exp(coef[i+1]/th0->T)/pow((exp(coef[i+1]/th0->T)-1),2);
             }
             th0->Cp=th0->Cp*R;
-            th0->H=coef[0]*(th0->T- *refT)+coef[1]/(coef[2]+1)+(pow(th0->T,(coef[2]+1))-pow(*refT,(coef[2]+1)));
+            th0->H=coef[0]*(th0->T- *refT)+coef[1]/(coef[2]+1)*(pow(th0->T,(coef[2]+1))-pow(*refT,(coef[2]+1)));
             for (i=3;i<13;i=i+2) if (coef[i]>0) th0->H=th0->H+coef[i]*coef[i+1]*(1/(exp(coef[i+1]/th0->T)-1)-1/(exp(coef[i+1]/ *refT)-1));
             th0->H=th0->H*R;
             if (coef[1]>0) th0->S=coef[0]*log(th0->T/ *refT)+coef[1]/coef[2]*(pow(th0->T,coef[2])-pow(*refT,coef[2]));
