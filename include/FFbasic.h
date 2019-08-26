@@ -82,13 +82,13 @@ enum FF_IntParamForm{FF_NoForm,FF_Pol1,FF_Pol1K,FF_Pol1J,FF_Pol1C,FF_Pol2,FF_Pol
 //In case the result contains energy, K,J,C indicates if the energy is expresed in K, Joules o Calories
 //Enumeration for units used in Flory-Huggins model
 enum FF_Units{FF_cal_cm3_05,FF_MPa_05};
-enum FF_SubstanceType{FF_Alkane,FF_Alkene,FF_Alkyne,FF_Cycloalkane,FF_Aromatic,FF_Water,FF_Alcohol,FF_Polyol,FF_Phenol,FF_Ether,FF_Aldehyde,FF_Ketone,FF_Acid,FF_Ester,FF_Amine,FF_Polymer};
+enum FF_SubstanceType{FF_NoFamily,FF_Alkane,FF_Alkene,FF_Alkyne,FF_Cycloalkane,FF_Aromatic,FF_Water,FF_Alcohol,FF_Polyol,FF_Phenol,FF_Ether,FF_Aldehyde,FF_Ketone,FF_Acid,FF_Ester,FF_Amine,FF_Polymer};
 
 //Structures
 //----------
 //Basic properties for pure or pseudopure substances
 typedef struct {int id,type,numMono,unifacPSRKSubg[10][2],unifacDortSubg[10][2];double MW,MWmono,Tc,Pc,Vc,Zc,w,Zra,r,q,qRes,VdWV,Hf0g,Gf0g,S0g,
-                Pa,Vliq,FV,mu,Q,RadGyr,Tm,Hm,Tb,Hildebrand,HansenD,HansenP,HansenH;}FF_BaseProp;
+                Pa,Vliq,FV,mu,Q,RadGyr,Tm,Hm,Tb,Hildebrand,HansenD,HansenP,HansenH,LnuA,LnuB;}FF_BaseProp;
 //Data for cubic EOS. Critical properties used are reported in order to better fix the EOS
 typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,VdWV,c,k1,k2,k3,k4;}FF_CubicEOSdata;
 //Cubic EOS parameters once given composition and T
@@ -108,7 +108,7 @@ typedef struct {double x,y;}FF_SinglePointData;
 typedef struct {char name[30],CAS[22],description[150];int id,model,UnifStdSubg[20][2],UnifPSRKSubg[20][2],UnifDortSubg[20][2],UnifNistSubg[20][2];
                 double refT,refP;FF_BaseProp baseProp;FF_SinglePointData RI,cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,lIsothComp,gVisc,gThC,sDens,sCp;
                 FF_CubicEOSdata cubicData;FF_SaftEOSdata saftData;FF_SWEOSdata swData;FF_Correlation cp0Corr,vpCorr,btCorr,hVsatCorr,lCpCorr,
-                lTfromHCorr,lDensCorr,lViscCorr,lThCCorr,lSurfTCorr,lIsothCompCorr,gDensCorr,gTfromDcorr,gViscCorr,gThCCorr,sDensCorr,sCpCorr;}FF_SubstanceData;
+                lTfromHCorr,lDensCorr,lViscCorr,lThCCorr,lSurfTCorr,lBulkModRCorr,gDensCorr,gTfromDcorr,gViscCorr,gThCCorr,sDensCorr,sCpCorr;}FF_SubstanceData;
 
 //UNIFAC data for a mixture. Used to speed-up calculations
 //Prepared for 20 substances and 30 subgroups. FV must be filled with the free volume of each substance if EntropicFV model is to be used

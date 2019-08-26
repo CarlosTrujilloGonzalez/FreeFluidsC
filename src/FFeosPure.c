@@ -2282,6 +2282,7 @@ void CALLCONV FF_IdealThermoEOS(const int *equation,const double coef[],double *
             break;
         case 3://DIPPR 107 correlation in calories/mol·K
         case 4://DIPPR 107 correlation in J/Kmol·K
+        case 200://DIPPR 107 correlation in J/kg·K
             th0->Cp=(coef[0]+coef[1]*pow(coef[2]/th0->T/sinh(coef[2]/th0->T),2)+coef[3]*pow(coef[4]/th0->T/cosh(coef[4]/th0->T),2));
             th0->H=(coef[0]*(th0->T-*refT)+coef[1]*coef[2]*(1/tanh(coef[2]/th0->T)-1/tanh(coef[2]/ *refT))+coef[3]*coef[4]*(tanh(coef[4]/ *refT)-tanh(coef[4]/th0->T)));
             th0->S=(coef[0]*log(th0->T/ *refT)+coef[1]*(coef[2]/th0->T/tanh(coef[2]/th0->T)-log(sinh(coef[2]/th0->T)))-coef[1]*(coef[2]/
@@ -2399,6 +2400,7 @@ void CALLCONV FF_IdealThermoEOS(const int *equation,const double coef[],double *
         th0->S=th0->S*th0->MW;
         break;
     case 6://DIPPR 100 in J/kgr·K
+    case 200://DIPPR 107 correlation in J/kg·K
         th0->Cp=th0->Cp*th0->MW*1e-3;
         th0->H=th0->H*th0->MW*1e-3;
         th0->S=th0->S*th0->MW*1e-3;
