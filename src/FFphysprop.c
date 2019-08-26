@@ -245,6 +245,7 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
         break;
     case 3://DIPPR107 Cp in cal/mol·K
     case 4://DIPPR107 Cp in J/Kmol·K
+    case 200://DIPPR107 Cp in J/kg·K
         eq=FF_DIPPR107;
         break;
     case 5://Wilhoit Cp0 J/mol·K
@@ -394,6 +395,7 @@ void FF_SpecificEnthalpyEntropyCorr(int *cor,const double coef[],double *MW,cons
         break;
     case 3://DIPPR 107 correlation in calories/mol·K
     case 4://DIPPR 107 correlation in J/Kmol·K
+    case 200://DIPPR107 Cp in J/kg·K
         for (i=0;i<*nPoints;i++){
             H[i]=coef[0]*x[i]+coef[1]*coef[2]*(1/tanh(coef[2]/x[i]))-coef[3]*coef[4]*tanh(coef[4]/x[i]);
             S[i]=coef[0]*log(x[i])+coef[1]*(coef[2]/x[i]/tanh(coef[2]/x[i])-log(sinh(coef[2]/x[i])))-coef[3]*(coef[4]/x[i]*tanh(coef[4]/x[i])-log(cosh(coef[4]/x[i])));
