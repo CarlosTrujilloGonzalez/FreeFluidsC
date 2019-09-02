@@ -92,7 +92,7 @@ typedef struct {int id,type,numMono,unifacPSRKSubg[10][2],unifacDortSubg[10][2];
 //Data for cubic EOS. Critical properties used are reported in order to better fix the EOS
 typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,VdWV,c,k1,k2,k3,k4;}FF_CubicEOSdata;
 //Cubic EOS parameters once given composition and T
-typedef struct {double a,Theta,b,c,u,w,dTheta,d2Theta;}FF_CubicParam;
+typedef struct {double a,Theta,b,c,u,w,dTheta,d2Theta,Tc,Pc,Zc;}FF_CubicParam;
 //Data for SAFT type EOS. Critical properties used are reported in order to better fix the EOS
 typedef struct {int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,sigma,m,epsilon,lr,la,chi,kAB,epsilonAB,mu,xp,Q;int nPos,nNeg,nAcid;}FF_SaftEOSdata;
 //Data for Schmidt-Wagner type EOS
