@@ -108,6 +108,7 @@ void CALLCONV FF_FixedParamCubic(const  FF_CubicEOSdata *data, FF_CubicParam *pa
         if (data->c>0) param->c=data->c;//if we supply a volume correction it is used
         else if ((data->c==0)&&(data->Zc>0)&&(data->Zc<0.45)) param->c=R*data->Tc*(0.1014048-0.3892896*data->Zc)/data->Pc;//if volume correction is 0, we apply that of Peneloux
         else param->c=0.0;//a negative number will indicate not to use volume correction
+        param->Zc=0.307;
         break;
     case FF_PRvTWU91:
         param->a = param->a = 0.42748 * pow(R*data->Tc,2)/ data->Pc*1.08;//0.599877;
@@ -119,6 +120,7 @@ void CALLCONV FF_FixedParamCubic(const  FF_CubicEOSdata *data, FF_CubicParam *pa
         //else if ((data->c==0)&&(data->Zc>0)&&(data->Zc<0.5)) param->c=R*data->Tc/data->Pc*(0.1014048-0.3892896*data->Zc);
         //else param->c=0;
         param->c=data->c;
+        param->Zc=0.307;
         break;
     case FF_PRFIT3://similar to FF_PRSV1, some parameters have no relationship with critical properties. There are 3 adjustable parameters:a, Tc, k1
         param->a = data->k1;
@@ -128,6 +130,7 @@ void CALLCONV FF_FixedParamCubic(const  FF_CubicEOSdata *data, FF_CubicParam *pa
         if (data->c>0) param->c=data->c;
         else if ((data->c==0)&&(data->Zc>0)&&(data->Zc<0.5)) param->c=R*data->Tc/data->Pc*(0.1014048-0.3892896*data->Zc);
         else param->c=0;
+        param->Zc=0.307;
         break;
     case FF_PRFIT4://parameters have no relationship with critical properties. There are 4 adjustable parameters:b,a,w and Tc
         param->a = data->k2;
@@ -137,6 +140,7 @@ void CALLCONV FF_FixedParamCubic(const  FF_CubicEOSdata *data, FF_CubicParam *pa
         if (data->c>0) param->c=data->c;
         else if ((data->c==0)&&(data->Zc>0)&&(data->Zc<0.5)) param->c=R*data->Tc/data->Pc*(0.1014048-0.3892896*data->Zc);
         else param->c=0;
+        param->Zc=0.307;
         break;
     case FF_SRK://Soaves-Redlich-Kwong.
     case FF_SRKSOF://Soaves-Redlich-Kwong Stamateria-Olivera-Fuentes with 2 extra parameters
@@ -149,6 +153,7 @@ void CALLCONV FF_FixedParamCubic(const  FF_CubicEOSdata *data, FF_CubicParam *pa
         if (data->c>0) param->c=data->c;
         else if ((data->c==0)&&(data->w>0)&&(data->w<1)) param->c=R*data->Tc/data->Pc*(0.001569568+0.03577392*data->w);
         else param->c=0;
+        param->Zc=0.3333;
         break;
     case FF_PRPOL1://Peng-robinson for polymers b=k1*MW, a=1,Theta=k2*MW (a=1)
         param->a=1;
@@ -166,6 +171,9 @@ void CALLCONV FF_FixedParamCubic(const  FF_CubicEOSdata *data, FF_CubicParam *pa
         break;
 
     }
+    param->Tc=data->Tc;
+    param->Pc=data->Pc;
+
 }
 
 //Calculates Theta and its derivatives, given a cubic EOS and T. Using critical and others constants
@@ -384,7 +392,9 @@ void CALLCONV FF_VfromTPcubic(const double *T,const double *P,const  FF_CubicPar
         resultL[0]=resultG[0]=Veos-param->c;//this is V
         resultL[1]=resultG[1]=param->Theta/(param->b*R* *T*(param->w-param->u))*log((Veos+ub)/(Veos+wb))+log(resultL[0]/(Veos-param->b));//This is Arr
         resultL[2]=resultG[2]=Z[0]*resultL[0]/Veos;//Z
-        *state='u';
+        if ((*T>=param->Tc)||(Z[0]>param->Zc)) *state='G';
+        else *state='L';
+        //printf("Vl:%f\n",resultL[0]);
     }
     else{
         m = 2 * pow(-L / 3,0.5);
@@ -1349,6 +1359,121 @@ EXP_IMP void CALLCONV FF_PfromTVSAFT(const double *T,const double *V,const  FF_S
 //--------------------------------------------------------------------------------
 void CALLCONV FF_VfromTPSAFT(const double *T,const double *P,const  FF_SaftEOSdata *data,const char *option,double resultL[3],double resultG[3],char *state)
 {
+    double V,Arr,Z,Pcalc,Vplus,ArrPlus,Zplus,error,dP_dV;
+    int i;
+    double maxError=0.0001;//maximum relative error accepted
+
+    double fw;
+    FF_CubicParam param;
+    param.b = 0.077796 * R * data->Tc / data->Pc;
+    param.a = 5.877359*param.b*R*data->Tc;//0.457235 * pow(R*data->Tc,2)/ data->Pc;
+    param.u=2.414214;//1+2^0.5
+    param.w=-0.414214;//1-2^0.5
+    param.c=0.0;
+    //if (data->w<=0.491) fw = 0.37464 + 1.54226 * data->w - 0.26992 * pow(data->w,2);//0.491
+    //else fw = 0.379642 + 1.487503 * data->w - 0.164423 * pow(data->w,2)+ 0.016666 * pow(data->w,3);
+    fw = 0.37464 + 1.54226 * data->w - 0.26992 * data->w * data->w;
+    param.Theta=param.a*pow((1 + fw * (1-pow((*T / data->Tc),0.5))),2);
+    char stateCubic;
+    //printf("b:%f u:%f w:%f a:%f Theta:%f\n",param.b, param.u,param.w,param.a,param.Theta);
+    FF_VfromTPcubic(T,P,&param,option,resultL,resultG,&stateCubic);
+
+    *state='f';//We beging puting calculation state information to fail. If calculation finish OK we will change this information
+    if ((*option!='g')||(!(stateCubic=='b'))){
+    //we calculate the liquid phase if not only the gas phase has been asked, or there is only one phase
+        if ((*T<0.95*data->Tc)||(*T>1.05*data->Tc)) V = resultL[0]/1.2; //initial guess for liquid mole volume in m3
+        else if ((*T>=0.99*data->Tc)&&(*T<1.03*data->Tc)) V = resultL[0]/4;
+        else V = resultL[0]/1.5;
+
+        Vplus=V*1.000001; //Vplus will mind a volume which corresponding pressure is lower than target pressure.
+        FF_ArrZfromTVSAFT(T,&V,data,&Arr,&Z);
+        FF_ArrZfromTVSAFT(T,&Vplus,data,&ArrPlus,&Zplus);
+        dP_dV=R* *T*(Zplus/Vplus-Z/ V)/(Vplus-V);
+        Pcalc=Z*R* *T/V;
+        error=*P-Pcalc;
+        i=1;
+        //printf("i= %d  Vl=%f Zl:%f error= %f  P= %f  dP_dV= %f\n",i,V,Z,error,Pcalc,dP_dV);
+        while ((fabs(error/ *P)>maxError) && (dP_dV < 0)&&(i<15))
+        {   V=V+error/dP_dV;
+            Vplus=V*1.000001;
+            FF_ArrZfromTVSAFT(T,&V,data,&Arr,&Z);
+            FF_ArrZfromTVSAFT(T,&Vplus,data,&ArrPlus,&Zplus);
+            dP_dV=R* *T*(Zplus/Vplus-Z/ V)/(Vplus-V);
+            Pcalc=Z*R* *T/V;
+            error=*P-Pcalc;
+            i=i+1;
+            //printf("i= %d  Vl=%f Zl:%f error= %f  P= %f  dP_dV= %f\n",i,V,Z,error,Pcalc,dP_dV);
+        }
+        if ((dP_dV < 0)&&(fabs(error/ *P)<=maxError)){//if dP/ddelta >=0
+            resultL[0]=V;
+            resultL[1]=Arr;
+            resultL[2]=Z;
+            *state='l';
+            //printf("Final liquid Vl:%f Zl:%f Arrl:%f\n",resultL[0],resultL[2],resultL[1]);
+        }
+        else
+        {
+            //printf("fallo liquido\n");
+            resultL[0]=resultL[1]=resultL[2]=0;
+        }
+    }
+
+    if ((*option!='l')||(!(stateCubic=='b')))//and the gas phase if not only the liquid one has been asked, or single value and not found as liquid
+    {   if ((*T<0.95*data->Tc)||(*T>1.05*data->Tc)) V = 1.2*resultG[0]; //initial guess for liquid mole volume in m3
+        else V = 2*resultG[0];
+        Vplus=V*1.000001; //Vplus will mind a volume which corresponding pressure is lower than target pressure.
+        FF_ArrZfromTVSAFT(T,&V,data,&Arr,&Z);
+        FF_ArrZfromTVSAFT(T,&Vplus,data,&ArrPlus,&Zplus);
+        dP_dV=R* *T*(Zplus/Vplus-Z/ V)/(Vplus-V);
+        Pcalc=Z*R* *T/V;
+        error=*P-Pcalc;
+        i=1;
+        //printf("i= %d  Vg:%f error= %f  dP_dV= %f\n",i,V, error,dP_dV);
+        while ((fabs(error/ *P)>maxError) && (dP_dV < 0)&&(i<10)&&(!((*state=='l')&&(V<=resultL[0]))))
+        {   V=V+error/dP_dV;
+            Vplus=V*1.000001;
+            FF_ArrZfromTVSAFT(T,&V,data,&Arr,&Z);
+            FF_ArrZfromTVSAFT(T,&Vplus,data,&ArrPlus,&Zplus);
+            dP_dV=R* *T*(Zplus/Vplus-Z/ V)/(Vplus-V);
+            Pcalc=Z*R* *T/V;
+            error=*P-Pcalc;
+            i=i+1;
+            //printf("i= %d  Vg= %f error= %f  P= %f  dP_dV= %f\n",i,V,error,Pcalc,dP_dV);
+        }
+
+        if ((dP_dV < 0)&&(fabs(error/ *P)<=maxError))
+        {
+            resultG[0]=V; //This is V
+            resultG[1]=Arr;
+            resultG[2]=Z;
+            if (*state=='l'){
+                if (fabs((resultL[0]-resultG[0])/resultL[0])>0.01) *state='b';
+                else *state='u';
+            }
+            else *state='g';
+        }
+        else
+        {
+            resultG[0]=resultG[1]=resultG[2]=0;
+        }
+    }
+    if (((*state=='u')||(*state=='l'))&&((*T>=data->Tc)||(resultL[0]>=R*data->Zc*data->Tc/data->Pc))){
+            //printf("resultL[0]:%f\n",resultL[0]);
+            resultG[0]=resultL[0];
+            resultG[1]=resultL[1];
+            resultG[2]=resultL[2];
+            *state='G';
+    }
+    if (*state=='l') *state='L';
+    else if  (*state=='g') *state='G';
+    //printf("Final state:%c Vl:%f Vg:%f Zl:%f Zg:%f\n",*state,resultL[0],resultG[0],resultL[2],resultG[2]);
+}
+
+
+//Z,Arr,V calculation for a pure substance, given T and P, according to FF_PCSAFT EOS
+//--------------------------------------------------------------------------------
+void CALLCONV FF_VfromTPSAFTOld(const double *T,const double *P,const  FF_SaftEOSdata *data,const char *option,double resultL[3],double resultG[3],char *state)
+{
     //Interesting to determine max after finding a positive dP/dV from gas. Probably not so interesting minimum from liquid. All by regula falsi
     *state='f';//We beging puting calculation state information to fail. If calculation finish OK we will change this information
     double V,Arr,Z,Pcalc,Vplus,ArrPlus,Zplus,error,errorRel,dP_dV,Zprev,Vmax,Vmin,Emax,Emin,dP_dVprev;
@@ -1573,19 +1698,23 @@ void CALLCONV FF_ArrZfromTVsw(const double *T,const double *V,const  FF_SWEOSdat
     *Arr=0;
     double tau=data->tRef/ *T;
     double delta=1/(*V*data->rhoRef);//rhoRef en mol/m3
+    double powDeltaTau;
     double partial;
     int i,j;
     double d12,D,z,p;
     double dp_ddelta,dD_ddelta,dDb_ddelta;
     for (i=0;i<data->nPol;i++)
     {
-        *Arr=*Arr+data->n[i]*pow(delta,data->d[i])*pow(tau,data->t[i]);//This will be Arr
-        dArr_ddelta=dArr_ddelta+data->d[i]*data->n[i]*pow(delta,data->d[i]-1)*pow(tau,data->t[i]);//And this dArr/ddelta at constant T
+        powDeltaTau=data->n[i]*pow(delta,data->d[i])*pow(tau,data->t[i]);
+        *Arr=*Arr+powDeltaTau;//This will be Arr
+        dArr_ddelta=dArr_ddelta+data->d[i]*powDeltaTau/delta;//And this dArr/ddelta at constant T
     }
     for (i=data->nPol;i<(data->nPol+data->nExp);i++)
     {
-        *Arr=*Arr+data->n[i]*pow(delta,data->d[i])*pow(tau,data->t[i])*exp(-pow(delta,data->c[i]));
-        dArr_ddelta=dArr_ddelta+data->n[i]*pow(delta,data->d[i]-1)*pow(tau,data->t[i])*exp(-pow(delta,data->c[i]))*(data->d[i]-data->c[i]*pow(delta,data->c[i]));
+        powDeltaTau=data->n[i]*pow(delta,data->d[i])*pow(tau,data->t[i])*exp(-pow(delta,data->c[i]));
+
+        *Arr=*Arr+powDeltaTau;
+        dArr_ddelta=dArr_ddelta+powDeltaTau*(data->d[i]-data->c[i]*pow(delta,data->c[i]))/delta;
     }
     for (i=(data->nPol+data->nExp);i<(data->nPol+data->nExp+data->nSpec);i++)
     {
@@ -1616,8 +1745,44 @@ void CALLCONV FF_ArrZfromTVsw(const double *T,const double *V,const  FF_SWEOSdat
 //-----------------------------------------------------------------
 EXP_IMP void CALLCONV FF_PfromTVsw(const double *T,const double *V,const  FF_SWEOSdata *data,double *P)
 {
-    double Arr,Z;
-    FF_ArrZfromTVsw(T,V,data,&Arr,&Z);
+    double Z;
+    double dArr_ddelta=0;
+    double tau=data->tRef/ *T;
+    double delta=1/(*V*data->rhoRef);//rhoRef en mol/m3
+    double powDeltaTau;
+    double partial;
+    int i,j;
+    double d12,D,z,p;
+    double dp_ddelta,dD_ddelta,dDb_ddelta;
+    for (i=0;i<data->nPol;i++)
+    {
+        powDeltaTau=data->n[i]*pow(delta,data->d[i])*pow(tau,data->t[i]);
+        dArr_ddelta=dArr_ddelta+data->d[i]*powDeltaTau/delta;//And this dArr/ddelta at constant T
+    }
+    for (i=data->nPol;i<(data->nPol+data->nExp);i++)
+    {
+        powDeltaTau=data->n[i]*pow(delta,data->d[i])*pow(tau,data->t[i])*exp(-pow(delta,data->c[i]));
+        dArr_ddelta=dArr_ddelta+powDeltaTau*(data->d[i]-data->c[i]*pow(delta,data->c[i]))/delta;
+    }
+    for (i=(data->nPol+data->nExp);i<(data->nPol+data->nExp+data->nSpec);i++)
+    {
+        j=i-data->nPol-data->nExp;
+        partial=data->n[i]*pow(delta,data->d[i])*pow(tau,data->t[i])*exp(-data->a[j]*pow((delta-data->e[j]),2)-data->b[j]*pow(tau-data->g[j],2));
+        dArr_ddelta=dArr_ddelta+(data->d[i]-2* delta*data->a[j]*(delta-data->e[j]))*partial/delta;
+    }
+    for (i=(data->nPol+data->nExp+data->nSpec);i<(data->nPol+data->nExp+data->nSpec+data->nFinal);i++)//additional terms
+    {
+        j=i-data->nPol-data->nExp-data->nSpec;
+        d12=pow((delta-1),2);
+        p=exp(-data->Cf[j]*d12-data->Df[j]*pow((tau-1),2));
+        z=(1-tau)+data->Af[j]*pow(d12,(1/2/data->betaf[j]));
+        D=pow(z,2)+data->Bf[j]*pow(d12,data->af[j]);
+        dp_ddelta=-2*data->Cf[j]*(delta-1)*p;
+        dD_ddelta=(delta-1)*(data->Af[j]*z*2/data->betaf[j]*pow(d12,(1/2/data->betaf[j]-1))+2*data->Bf[j]*data->af[j]*pow(d12,(data->af[j]-1)));
+        dDb_ddelta=data->bf[j]*pow(D,(data->bf[j]-1))*dD_ddelta;
+        dArr_ddelta=dArr_ddelta+data->n[i]*(pow(D,data->bf[j])*(p+ delta*dp_ddelta)+dDb_ddelta* delta*p);//dArr/ddelta
+    }
+    Z=1+delta*dArr_ddelta;//this is Z
     *P=R* *T*Z / *V;//This is P in Pa
 }
 
@@ -1682,33 +1847,67 @@ void CALLCONV FF_PresDerSW(const double *tau,const double *delta,const  FF_SWEOS
 //----------------------------------------------------------------------------------------------------
 void CALLCONV FF_VfromTPsw(const double *T,const double *P,const  FF_SWEOSdata *data,const char *option,double resultL[3],double resultG[3],char *state)
 {
-    *state='f';//We beging puting calculation state information to fail. If calculation finish OK we will change this information
     double tau=data->tRef/ *T;
-    //printf("tau: %f \n",tau);
     double delta,error;
     double answer[2];
     int i;
     double maxError;
-    if (*T>0.95*data->Tc) maxError=0.0001;
-    else maxError=0.00001;
-    if (*option!='g')//we calculate the liquid phase if not only the gas phase has been asked
-    {
-        delta=1/(data->rhoRef*0.0778*R*data->Tc/data->Pc);//we use b calculated as per Peng-Robinson to initiate V
+    if (*T>0.95*data->Tc) maxError=0.00001;
+    else maxError=0.0001;
+    //{int id;enum FF_EOS eos;double MW,Tc,Pc,Zc,w,VdWV,c,k1,k2,k3,k4;}
+    //{double a,Theta,b,c,u,w,dTheta,d2Theta;}FF_CubicParam;
+
+    double fw;
+    FF_CubicParam param;
+    param.b = 0.077796 * R * data->Tc / data->Pc;
+    param.a = 5.877359*param.b*R*data->Tc;//0.457235 * pow(R*data->Tc,2)/ data->Pc;
+    param.u=2.414214;//1+2^0.5
+    param.w=-0.414214;//1-2^0.5
+    param.c=0.0;
+    //if (data->w<=0.491) fw = 0.37464 + 1.54226 * data->w - 0.26992 * pow(data->w,2);//0.491
+    //else fw = 0.379642 + 1.487503 * data->w - 0.164423 * pow(data->w,2)+ 0.016666 * pow(data->w,3);
+    fw = 0.37464 + 1.54226 * data->w - 0.26992 * data->w * data->w;
+    param.Theta=param.a*pow((1 + fw * (1-pow((*T / data->Tc),0.5))),2);
+    char stateCubic;
+    //printf("b:%f u:%f w:%f a:%f Theta:%f\n",param.b, param.u,param.w,param.a,param.Theta);
+    FF_VfromTPcubic(T,P,&param,option,resultL,resultG,&stateCubic);
+
+    *state='f';
+    /*
+    if (*state=='u'){
+        if (*T>=data->Tc) *state='G';
+        else if (*P>data->Pc) *state='L';
+        else{
+            ub= param.u*param.b;
+            wb=param.u*param.b;
+            Vub=resultL[0]+ub;
+            Vub2=Vub*Vub;
+            Vwb=resultL[0]+wb;
+            Vwb2=Vwb*Vwb;
+            d2P_V=-2*param.Theta*(1/(Vub2*Vub*Vwb)+1/(Vub2*Vwb2)+1/(Vub*Vwb2*Vwb))+2*R* *T/pow((resultL[0]-param.b),3);
+            printf("T:%f Vl:%f d2P_V:%f\n",*T-273.15,resultL[0],d2P_V);
+            if ((d2P_V>0)&&(1/resultL[0]>data->rhoRef)) *state='L';
+            else *state='G';
+        }
+    }*/
+    if ((*option!='g')||(!(stateCubic=='b'))){
+    //we calculate the liquid phase if not only the gas phase has been asked, or there is only one phase
+        if ((*T<0.95*data->Tc)||(*T>1.05*data->Tc)) delta=1.3/(resultL[0]*data->rhoRef);
+        else if ((*T>=0.97*data->Tc)&&(*T<1.03*data->Tc)) delta=1.8/(resultL[0]*data->rhoRef);
+        else if ((*T>=0.99*data->Tc)&&(*T<1.01*data->Tc)) delta=2.5/(resultL[0]*data->rhoRef);
+        else delta=1.4/(resultL[0]*data->rhoRef);//we multiply by 1.2/1.4 the density obtained from PR EOS to begin the exploration
         FF_PresDerSW(&tau,&delta,data,answer);
         error =*P-answer[0];
-
         i=1;
-        //printf("i= %d  error= %f  dP_ddelta= %f\n",i,error,answer[1]);
-        while ((fabs(error/ *P)>maxError) && (answer[1] >  0)&&(delta>1))
-        {
-            if (delta<1.3) delta=delta+error/answer[1]*0.5;
-            else delta=delta+error/answer[1];//Newton method for root finding
+        //printf("i= %d  error= %f  delta:%f dP_ddelta= %f\n",i,error,delta,answer[1]);
+        while ((fabs(error/ *P)>maxError) && (answer[1] > 0)&&(delta>1.0)&&(i<15))
+        {   delta=delta+error/answer[1];
             FF_PresDerSW(&tau,&delta,data,answer);
             error =error =*P-answer[0];
             i=i+1;
-            //printf("i= %d  deltaL= %f error= %f  P= %f  dP_ddelta= %f\n",i,delta,error,answer[0],answer[1]);
+            //printf("i= %d  deltaL= %f rhoL:%f error= %f  P= %f  dP_ddelta= %f\n",i,delta,delta*data->rhoRef*data->MW/1000,error,answer[0],answer[1]);
         }
-        if ((answer[1]>=0)&&(delta>1))//if dP/ddelta >=0
+        if ((answer[1]>=0)&&(fabs(error/ *P)<=maxError))//if dP/ddelta >=0
         {
             resultL[0]=1/(delta*data->rhoRef); //This is V
             FF_ArrZfromTVsw(T,&resultL[0],data,&resultL[1],&resultL[2]);
@@ -1716,44 +1915,54 @@ void CALLCONV FF_VfromTPsw(const double *T,const double *P,const  FF_SWEOSdata *
         }
         else
         {
+            //printf("fallo liquido\n");
             resultL[0]=resultL[1]=resultL[2]=0;
         }
+        //printf("i= %d  deltaL= %f rhoL:%f error= %f  P= %f  dP_ddelta= %f state:%c\n",i,delta,delta*data->rhoRef*data->MW/1000,error,answer[0],answer[1],*state);
     }
 
-    if (*option!='l')//and the gas phase if not only the liquid one has been asked for
+    if ((*option!='l')||(!(stateCubic=='b')))//and the gas phase if not only the liquid one has been asked, or single value and not found as liquid
     {
-        delta=*P * tau/(R* data->tRef*data->rhoRef);//initial guess for gas volume
+        delta=0.8/(resultG[0]*data->rhoRef);//initial guess for gas volume
+        //printf("Vg inicial:%f d:%f delta:%f\n",resultG[0],1/resultG[0],delta);
         //printf("tau= %f  delta= %f \n",tau,delta);
         FF_PresDerSW(&tau,&delta,data,answer);
         error =*P-answer[0];
         i=1;
         //printf("i= %d  error= %f  dP_ddelta= %f\n",i,error,answer[1]);
-        while ((fabs(error/ *P)>maxError) && (answer[1] >  0)&&(delta<1))
-        {
-            if (delta>0.75) delta=delta+error/answer[1]*0.5;
-            //else if (delta>0.6) delta=delta+error/answer[1]*0.5;
-            else delta=delta+error/answer[1];//Newton method for root finding
+        while ((fabs(error/ *P)>maxError) && (answer[1] >0)&&(i<15)&&(!((*state=='l')&&(1/(delta*data->rhoRef)<=resultL[0]))))
+        {   delta=delta+error/answer[1];
             FF_PresDerSW(&tau,&delta,data,answer);
             error =error =*P-answer[0];
             i=i+1;
-            //printf("i= %d  deltaG= %f error= %f  P= %f  dP_ddelta= %f\n",i,delta,error,answer[0],answer[1]);
+            //printf("i= %d  deltaG= %f rhoG:%f error= %f  P= %f  dP_ddelta= %f\n",i,delta,delta*data->rhoRef*data->MW/1000,error,answer[0],answer[1]);
         }
-        if ((answer[1]>=0)&&(delta<1))
+        if ((answer[1]>=0)&&(fabs(error/ *P)<=maxError))
         {
-            resultG[0]=1/(delta*data->rhoRef); //This is V
+            resultG[0]=0.8/(delta*data->rhoRef); //This is V
             FF_ArrZfromTVsw(T,&resultG[0],data,&resultG[1],&resultG[2]);
             if (*state=='l'){
-                if (fabs((resultL[0]-resultG[0])/resultL[0])>0.001) *state='b';
-                else state='u';
+                if (fabs((resultL[0]-resultG[0])/resultL[0])>0.01) *state='b';
+                else *state='u';
             }
             else *state='g';
         }
         else
         {
+            //printf("fallo gas\n");
             resultG[0]=resultG[1]=resultG[2]=0;
         }
+        //printf("i= %d  deltaG= %f rhoG:%f error= %f  P= %f  dP_ddelta= %f state:%c\n",i,delta,delta*data->rhoRef*data->MW/1000,error,answer[0],answer[1],*state);
     }
-
+    if (((*state=='u')||(*state=='l'))&&((*T>=data->Tc)||(1/resultG[0]<data->rhoRef))){
+            resultG[0]=resultL[0];
+            resultG[1]=resultL[1];
+            resultG[2]=resultL[2];
+            *state='G';
+    }
+    if (*state=='l') *state='L';
+    else if  (*state=='g') *state='G';
+    //printf("Final state:%c\n\n",*state);
 }
 
 //Arr (reduced residual Helmholtz energy) and its partial derivatives calculation for a pure substance, given tau and delta, according to SW EOS
@@ -1905,6 +2114,8 @@ void CALLCONV FF_PfromTVeos(const int *eosType,const double *T,const double *V,c
 //-------------------------------------------------
 void CALLCONV FF_VfromTPeos(const int *eosType,const double *T,const double *P,const void *data,const char *option,double resultL[3],double resultG[3],char *state)
 {
+    //option= 'l':get liquid volume, 'g':gas, 'b':both, 's':determine also stable phase
+    //state= 'u':just one solution found, 'l': solution found from liquid end, 'g':found from gas end, 'b':two solutions found, 'L':the stable phase is liquid, 'G': is gas
     //printf("P:%f",*P);
      FF_CubicParam param;
     switch (*eosType)//if we have a cubic eos the first step is to calculate its parameters
@@ -1932,6 +2143,7 @@ void CALLCONV FF_VfromTPeos(const int *eosType,const double *T,const double *P,c
             break;
     }
     //printf("T:%f  P:%f Vl:%f ArrL:%f Zl:%f\n",*T,*P,resultL[0],resultL[1],resultL[2]);
+    //the answer from SAFT and SW is very elaborated to L or G, but from Cubic is u or b
     if (*option=='s'){
         if (*state=='b'){
             if ((resultL[1]+resultL[2]-1-log(resultL[2]))<(resultG[1]+resultG[2]-1-log(resultG[2]))) *state='L';//we compare Gdr
@@ -2081,7 +2293,121 @@ void CALLCONV FF_TbEOS(const int *eosType,const double *P,const void *data,doubl
 
 //Vapor pressure calculation
 //--------------------------
+
+
 void CALLCONV FF_VpEOS(const int *eosType,const double *T,const void *data,double *Vp)
+{
+    //printf("Hola, soy Vp, EOS type:%i\n",*eosType);
+    int n=0;//number of calculations done
+    double phiMaxError;
+     double Tc,Pc,w;
+    int i;
+    //printf("Eos type:%i\n",*eosType);
+    switch (*eosType)
+    {
+        case FF_SAFTtype:
+            if ((( FF_SaftEOSdata*)data)->eos==FF_PCSAFTPOL1){
+                *Vp=0;
+                return;
+            }
+            Tc=(( FF_SaftEOSdata*)data)->Tc;
+            Pc=(( FF_SaftEOSdata*)data)->Pc;
+            w=(( FF_SaftEOSdata*)data)->w;
+            //printf("Tc:%f Pc:%f sigma:%f m:%f epsilon:%f \n",Tc,Pc,(( FF_SaftEOSdata*)data)->sigma,(( FF_SaftEOSdata*)data)->m,(( FF_SaftEOSdata*)data)->epsilon);
+            break;
+        case FF_SWtype:
+            if (((( FF_SWEOSdata*)data)->eos==FF_IAPWS95)||((( FF_SWEOSdata*)data)->eos==IF97)){
+                Tc=647.096;
+                if (*T>=Tc)
+                {
+                    *Vp=+HUGE_VALF;
+                }
+                else
+                {
+                    double tau=*T-0.23855557567849/(*T-0.65017534844798e3);
+                    double tau2=tau*tau;
+                    double A=tau2+0.11670521452767e4*tau-0.72421316703206e6;
+                    double B=-0.17073846940092e2*tau2+0.1202082470247e5*tau-0.32325550322333e7;
+                    double C=0.1491510861353e2*tau2-0.48232657361591e4*tau+0.40511340542057e6;
+                    *Vp=pow(2*C/(-B+pow(B*B-4*A*C,0.5)),4)*1e6;
+                }
+                return;
+            }
+            Tc=(( FF_SWEOSdata*)data)->Tc;
+            Pc=(( FF_SWEOSdata*)data)->Pc;
+            w=(( FF_SWEOSdata*)data)->w;
+            //printf("EOS:%i\n",(( FF_SWEOSdata*)data)->eos);
+            break;
+        //case FF_PRPOL1:
+            //Tc=1000;
+            //Pc=1e6;
+            //break;
+        default://Cubic eos
+        {   enum FF_EOS tipo=(( FF_CubicEOSdata*)data)->eos;
+            //printf("estoy en Vp, a ver que esos es:%i\n",tipo);
+            if (((( FF_CubicEOSdata*)data)->eos==FF_PRPOL1)||((( FF_CubicEOSdata*)data)->eos==FF_SRKPOL2)){
+                *Vp=0;
+                return;
+            }
+            Tc=(( FF_CubicEOSdata*)data)->Tc;
+            Pc=(( FF_CubicEOSdata*)data)->Pc;
+            w=(( FF_CubicEOSdata*)data)->w;
+            //printf("Hola, soy Vp cubic eos:%i T:%f Tc:%f Pc:%f w:%f k1:%f\n",*eosType,*T,Tc,Pc,(( FF_CubicEOSdata*)data)->w,(( FF_CubicEOSdata*)data)->k1);
+            break;
+        }
+    }
+    if ((*T>=Tc)&&(!(Tc==0)))//If T> supplied Tc no calculation is made
+    {
+        *Vp=+HUGE_VALF;//Temperatura too high over normal Tc
+        //printf("T:%f Tc:%f\n",*T,Tc);
+    }
+    else//We need to calculate Vp
+    {
+        phiMaxError=0.0001;
+        double P,phiL,phiG;//Pressure and fugacity coef.
+        double answerL[3],answerG[3];
+        char option='b',state;
+        Pc=Pc;//In order to allow for eos giving higher Pc
+        P=Pc/2;//Initial pressure guess
+        i=4;//i will be used in the calculation of the new temperature
+        //printf("Initial Vp guess:%f\n",P);
+        FF_VfromTPeos(eosType,T,&P,data,&option,answerL,answerG,&state);
+        //printf("T:%f P:%f  Vl:%f  Zl:%f  Vg:%f  Zg:%f state:%c\n",*T,P,answerL[0],answerL[2],answerG[0],answerG[2],state);
+
+        while (!(state=='b'))//Till we find a pressure with different possitive liquid and gas solutions
+        {
+            if ((state=='G')||(state=='g'))P=P+Pc/i;
+            else if ((state=='L')||(state=='l'))P=P-Pc/i;
+            FF_VfromTPeos(eosType,T,&P,data,&option,answerL,answerG,&state);
+            i=i*2;
+            n=n+1;
+            //printf("Finding two phases n:%i i:%i P:%f  Vl:%f  Zl:%f  Vg%f  Zg%f\n",n,i/2,P,answerL[0],answerL[2],answerG[0],answerG[2]);
+            if (n>100){
+                *Vp=0;
+                return;
+            }
+        }
+        phiL=exp(answerL[1]+answerL[2]-1)/answerL[2];
+        phiG=exp(answerG[1]+answerG[2]-1)/answerG[2];
+        //printf("Initial phi calculation T:%f P:%f  phiL:%f  phiG:%f\n",*T,P,phiL,phiG);
+        while (fabs(phiL-phiG)>phiMaxError)
+        {
+            P=P* pow((phiL / phiG),0.6);
+            FF_VfromTPeos(eosType,T,&P,data,&option,answerL,answerG,&state);
+            phiL=exp(answerL[1]+answerL[2]-1)/answerL[2];
+            phiG=exp(answerG[1]+answerG[2]-1)/answerG[2];
+            n=n+1;
+            //printf("%i Pb:%f  phiL:%f  phiG:%f\n",n-1,P,phiL,phiG);
+            if (n>100){
+                *Vp=0;
+                return;
+            }
+        }
+        *Vp=P;
+    }
+}
+
+void CALLCONV FF_VpEOSOld(const int *eosType,const double *T,const void *data,double *Vp)
 {
     //printf("Hola, soy Vp, EOS type:%i\n",*eosType);
     int n=0;//number of calculations done
@@ -2166,7 +2492,7 @@ void CALLCONV FF_VpEOS(const int *eosType,const double *T,const void *data,doubl
             i=4;//i will be used in the calculation of the new temperature
         }
 
-        //printf("Initial Vp guess:%f\n",P);
+        printf("Initial Vp guess:%f\n",P);
         FF_VfromTPeos(eosType,T,&P,data,&option,answerL,answerG,&state);
         //printf("T:%f P:%f  Vl:%f  Zl:%f  Vg:%f  Zg:%f state:%c\n",*T,P,answerL[0],answerL[2],answerG[0],answerG[2],state);
 
@@ -2174,8 +2500,8 @@ void CALLCONV FF_VpEOS(const int *eosType,const double *T,const void *data,doubl
         {
 
 
-            if ((state=='g')||(answerL[2]>0.3))P=P+Pc/i;
-            else if ((state=='l')||(answerL[2]<0.3))P=P-Pc/i;
+            if ((state=='G')||(state=='g')||(answerL[2]>0.3))P=P+Pc/i;
+            else if ((state=='L')||(state=='l')||(answerL[2]<0.3))P=P-Pc/i;
             else//If we have found only one result from both sides but state is not known, or none
             {
                 P=P+Pc/i;//we go up
@@ -2210,7 +2536,7 @@ void CALLCONV FF_VpEOS(const int *eosType,const double *T,const void *data,doubl
 
             i=i*2;
             n=n+1;
-            //printf("Finding two phases n:%i i:%i P:%f  Vl:%f  Zl:%f  Vg%f  Zg%f\n",n,i/2,P,answerL[0],answerL[2],answerG[0],answerG[2]);
+            printf("Finding two phases n:%i i:%i P:%f  Vl:%f  Zl:%f  Vg%f  Zg%f\n",n,i/2,P,answerL[0],answerL[2],answerG[0],answerG[2]);
             if (n>15){
                 *Vp=0;
                 return;

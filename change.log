@@ -1,3 +1,7 @@
+Version 1.4.0
+- Much improved density solver, that allows to work at fractions of degree from the critical point and at high pressure.
+- Simpler and improved vapor pressure solver.
+
 Version 1.3.0
 - Added information for reduced buld modulus of the liquid in FF_BaseProp and FF_SubstanceData structures
 - Added FF_NoFamily in the FF_SubstanceType enumerarion
