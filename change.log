@@ -1,3 +1,6 @@
+Version 1.4.1
+- Bug correction: The vapor density calculated by the multiparameter EOS was divided by 0.8.
+
 Version 1.4.0
 - Much improved density solver, that allows to work at fractions of degree from the critical point and at high pressure.
 - Simpler and improved vapor pressure solver.
