@@ -1,3 +1,12 @@
+Version 1.5.0
+- Structure FF_SubstanceData (in FFbasic.h) enlarged: Longer name, and addition of refH and refS,.
+- New functions that allow EOS calculations passing a FF_SubstanceData structure.
+- Faster and more complete calculation of residual Helmholtz derivatives in multiparameter EOS.
+- Several bug corrections.
+- New function for viscosity calculation from T and P (phase independent).
+- Corresponding states saturated viscosity and thermal conductivity calculation added.
+- PPDS9 fitting added.
+
 Version 1.4.2
 - Bug correction: The structure for multiparameter EOS data was limiting the number of terms below the used.
 

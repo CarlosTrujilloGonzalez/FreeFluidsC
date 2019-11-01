@@ -82,7 +82,8 @@ enum FF_IntParamForm{FF_NoForm,FF_Pol1,FF_Pol1K,FF_Pol1J,FF_Pol1C,FF_Pol2,FF_Pol
 //In case the result contains energy, K,J,C indicates if the energy is expresed in K, Joules o Calories
 //Enumeration for units used in Flory-Huggins model
 enum FF_Units{FF_cal_cm3_05,FF_MPa_05};
-enum FF_SubstanceType{FF_NoFamily,FF_Alkane,FF_Alkene,FF_Alkyne,FF_Cycloalkane,FF_Aromatic,FF_Water,FF_Alcohol,FF_Polyol,FF_Phenol,FF_Ether,FF_Aldehyde,FF_Ketone,FF_Acid,FF_Ester,FF_Amine,FF_Polymer};
+enum FF_SubstanceType{FF_NoFamily,FF_Alkane,FF_Alkene,FF_Alkyne,FF_Cycloalkane,FF_Aromatic,FF_Water,FF_Alcohol,FF_Polyol,FF_Phenol,
+                      FF_Ether,FF_Aldehyde,FF_Ketone,FF_Acid,FF_Ester,FF_Amine,FF_Polymer,FF_HaloAlkane,FF_HaloAlkene};
 
 //Structures
 //----------
@@ -105,8 +106,9 @@ typedef struct {double x,y;}FF_SinglePointData;
 
 
 //Data for a pure substance, including substructures for basic data, EOS and physical properties
-typedef struct {char name[30],CAS[22],description[150];int id,model,UnifStdSubg[20][2],UnifPSRKSubg[20][2],UnifDortSubg[20][2],UnifNistSubg[20][2];
-                double refT,refP;FF_BaseProp baseProp;FF_SinglePointData RI,cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,lIsothComp,gVisc,gThC,sDens,sCp;
+//refT,refP are the base for the ideal part calculation by the EOS. refH and refS are the enthalpy and entropy obtained for the reference state used(ASHRAE, NBP, IIR).
+typedef struct {char name[50],CAS[22],description[150];int id,model,UnifStdSubg[20][2],UnifPSRKSubg[20][2],UnifDortSubg[20][2],UnifNistSubg[20][2];
+                double refT,refP,refH,refS;FF_BaseProp baseProp;FF_SinglePointData RI,cp0,vp,hVsat,lCp,lDens,lVisc,lThC,lSurfT,lIsothComp,gVisc,gThC,sDens,sCp;
                 FF_CubicEOSdata cubicData;FF_SaftEOSdata saftData;FF_SWEOSdata swData;FF_Correlation cp0Corr,vpCorr,btCorr,hVsatCorr,lCpCorr,
                 lTfromHCorr,lDensCorr,lViscCorr,lThCCorr,lSurfTCorr,lBulkModRCorr,gDensCorr,gTfromDcorr,gViscCorr,gThCCorr,sDensCorr,sCpCorr;}FF_SubstanceData;
 
@@ -132,7 +134,7 @@ typedef struct {char name[30],description[150],subsName[15][30],CAS[15][22];int 
                 FF_Correlation cp0Corr[15],vpCorr[15],btCorr[15],hVsatCorr[15],lCpCorr[15],lDensCorr[15],lViscCorr[15],lThCCorr[15],lSurfTCorr[15],
                 gDensCorr[15],gViscCorr[15],gThCCorr[15],sDensCorr[15],sCpCorr[15];}FF_MixData;
 //Thermodynamic properties records
-typedef struct {double MW,T,P,V,A,G,S,U,H,dP_dT,dP_dV,Cv,Cp,SS,JT,IT;}FF_ThermoProperties;//smaller record mainly for ideal gas calculations
+typedef struct {double MW,T,P,V,A,G,S,U,H,dP_dT,dP_dV,Cv,Cp,SS,JT,IT;}FF_ThermoProperties;
 typedef struct {double fraction,MW,T,P,V,A,G,S,U,H,dP_dT,dP_dV,Cv,Cp,SS,JT,IT,ArrDer[6],c[15],subsPhi[15];}FF_PhaseThermoProp;//fraction stands for (phase moles)/(total mix moles)
 typedef struct {double MW,T,P;FF_PhaseThermoProp phase[4];}FF_MixThermoProp;
 typedef struct {double uE,hE,gE;}ExcessProp;

@@ -161,6 +161,16 @@ EXP_IMP void CALLCONV FF_GasThCondTV(double *T,double *V,FF_SubstanceData *data,
 
 //Thermal conductivity of low pressure gas mixtures. Mason and Saxena method
 EXP_IMP void CALLCONV FF_MixLpGasThCondTpMason(FF_MixData *mix,double *T,double y[],double *gThCond);
+
+//Temperature,volume dependent, phase independent viscosity.
+void CALLCONV FF_ViscosityTDens(int subsRef, double *T, double *molarDens,double eta[3]);
+
+//Correponding states calculation
+EXP_IMP void CALLCONV FF_CorrespondingStatesSat(FF_SubstanceData *subs, FF_SubstanceData *ref, double *T, double result[2]);
+
+//General extended correponding states calculation, using arr
+void CALLCONV FF_CorrespondingStates(FF_SubstanceData *subs, FF_SubstanceData *ref, double *T, double result[2]);
+
 #ifdef __cplusplus
 }
 #endif
