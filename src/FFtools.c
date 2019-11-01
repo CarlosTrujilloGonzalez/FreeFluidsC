@@ -249,6 +249,23 @@ void CALLCONV FF_OptCorrelation(unsigned nVar,double lb[],double ub[],char enfor
         ub[4]=1e4;
         var[4]=0;
         break;
+    case FF_PPDS9://Liquid Viscosity
+        lb[0]=-5.0;
+        ub[0]=1e1;
+        var[0]=3.0;
+        lb[1]=-1.0;
+        ub[1]=1e1;
+        var[1]=5.0;
+        lb[2]=1.0e2;
+        ub[2]=2.0e3;
+        var[2]=4.0e2;
+        lb[3]=-1.0e4;
+        ub[3]=5.0e2;
+        var[3]=-1.0e2;
+        lb[4]=1.0e-7;
+        ub[4]=1.0e-3;
+        var[4]=1.0e-5;
+        break;
     case FF_Antoine1:
     case FF_Antoine2:
         lb[0]=0;
@@ -426,7 +443,7 @@ double CALLCONV FF_SaftFitError(unsigned nVar, const double coef[], double grad[
     }
 
     VpDiff=VpDiff/data->nVpPoints;
-    error=0.4*VpDiff+0.6*densDiff;
+    error=0.3*VpDiff+0.7*densDiff;
     if (data->error>error){
         data->error=error;
         data->vpError=VpDiff;
@@ -561,7 +578,7 @@ void CALLCONV FF_OptSAFTparam(unsigned optTime,unsigned nVar,double lb[],double 
         lb[0]=2.0;
         ub[0]=4.1;
         lb[1]=1;
-        ub[1]=10;
+        ub[1]=12;
         lb[2]=150;
         ub[2]=350;
         var[0]=2.5;

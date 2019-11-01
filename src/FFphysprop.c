@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include "FFbasic.h"
 #include "FFphysprop.h"
+#include "FFeosPure.h"
 
 //Calculates the result of the given equation
 void CALLCONV FF_CorrelationResult(const int *eq,const double coef[],const int *nPoints,double x[],double y[]){//x contains the in variable, and y the out variable
@@ -210,6 +211,7 @@ EXP_IMP void CALLCONV FF_PhysPropCorr(const int *cor,const double coef[],const d
     case 80://DIPPR 100 Solid Cp in J/(Kmol·K)
     case 82://DIPPR 100 Solid Cp in J/(kgr·K)
     case 111://DIPPR100 Gas viscosity in Pa·s
+    case 112://DIPPR100 viscosity correction factor for NIST ECS calculation. Input reduced rho, output factor
     case 121://DIPPR100 Gas thermal conductivity in W/(m·K)
     case 140://DIPPR100 T in K from liquid enthalpy in J/kgr
     case 150://DIPPR100 Isothermal compressibility adimensional
@@ -867,6 +869,13 @@ void CALLCONV FF_LiquidThCondLatini(double *T,FF_BaseProp *data,double *thCond){
         beta=1.0;
         gamma=0.167;
         break;
+    case FF_HaloAlkane:
+    case FF_HaloAlkene:
+        A=0.562;
+        alpha=0.0;
+        beta=0.5;
+        gamma=-0.167;
+        break;
     default:
         A=0.00383;
         alpha=1.2;
@@ -1234,7 +1243,7 @@ void CALLCONV FF_GasLpThCondTCpChung(double *T,double *Cp0,FF_BaseProp *data,dou
     ldVisc=0;
     P=1e5;
     FF_GasViscTPcpLucas(T,&P,data,&ldVisc,&visc);
-    alpha=(*Cp0-R)/R-1.5;
+    alpha=(*Cp0*data->MW*0.001-R)/R-1.5;
     beta=0.7862 - 0.7109*data->w + 1.3168 *data->w*data->w;
     Tr=*T/data->Tc;
     Z=2.0 + 10.5*Tr*Tr;
@@ -1315,5 +1324,291 @@ void CALLCONV FF_MixLpGasThCondTpMason(FF_MixData *mix,double *T,double y[],doub
             sigma=sigma+y[j]*A[i][j];
         }
         *gThCond=*gThCond+y[i]*sGthCond[i]/sigma;
+    }
+}
+
+
+//Temperature,volume dependent, phase independent viscosity.
+void CALLCONV FF_ViscosityTDens(int subsRef, double *T, double *molarDens,double eta[3]){
+    int i,j;
+    double MW;
+    double rhoReducing,Treducing;
+    double Tred,lnTred;
+    double epsilon;//epsilon/kb
+    double sigma;
+    double CSred;//reduced cross section
+    double b[9]={-19.572881,219.73999,-1015.3226,2471.01251,-3375.1717,2491.6597,-787.26086,14.085455,-0.34664158};//second virial coefficients
+    double f1,g1,g2;
+    double etai=0;//ideal part
+    double etaf=0;//Rainwater-Friend part
+    double etab=0;//Batschinski part
+    double delta,delta0,tau;
+    if (subsRef==1){//propane
+        MW=44.0956;
+        epsilon=263.88;
+        sigma=0.49748;//nm
+        Treducing=369.825;
+        rhoReducing=5000;//mol/m3
+        double a[4]={0.25104574,-0.47271238,0.0,0.060836515,0.0};//coefficients for propane
+        double e[4][3]={{35.9873030195,-180.512188564,87.7124888223}, {-105.773052525,205.319740877,-129.21093261},
+                        {58.9491587759,-129.7400331,76.6280419971},{-9.59407868475,21.0726986598,-14.3971968187}};
+        Tred=*T/epsilon;
+        lnTred=log(Tred);
+        CSred=exp(a[0]+lnTred*(a[1]+lnTred*(a[2]+lnTred*(a[3]+lnTred*a[4]))));
+        f1=1616.88405374;
+        g1=2.50053938863;
+        //g2=2.1517543007382995;//From CoolProp
+        g2=0.860516059264;
+        delta=*molarDens/rhoReducing;
+        tau=*T/Treducing;
+        delta0=g1*(1+g2*pow(tau,0.5));
+        etab=0;
+        for(i=0;i<4;i++)for(j=0;j<3;j++)etab=etab+e[i][j]*pow(delta,i+2)/pow(tau,j);
+        etab=etab+f1*(delta/(delta0-delta)-delta/delta0);
+
+    }
+    else if(subsRef==2){//R134A
+        MW=102.031;
+        epsilon=299.363;
+        sigma=4.68932;//nm
+        Treducing=374.21;
+        rhoReducing=5017.053;//mol/m3
+        double a[2]={0.355404,-0.464337,0.0257353};
+        CSred=exp(a[0]+lnTred*(a[1]+lnTred*a[2]));
+        f1=214.76332;
+        g1=3.163695636;
+        g2=0.0;
+    }
+
+    etai=0.021357*pow(*T*MW,0.5)/(sigma*sigma*CSred);//micro Pa·s.
+    etaf=b[0];
+    for(i=1;i<7;i++){
+        etaf=etaf+b[i]*pow(Tred,(-0.25*i));
+        //printf("i%i pow:%f\n",i,pow(Tred,(-0.5*i)));
+    }
+
+    etaf=etaf+b[7]*pow(Tred,-2.5)+b[8]*pow(Tred,-5.5);//this is the reduced second viscosity Virial coefficient
+    etaf=etai*etaf*Av*pow(sigma,3)*1e-27;//pass sigma^3 from nm to m3
+    etaf=etaf* *molarDens;//microPa·s
+
+    eta[0]=etai*1e-6;
+    eta[1]=etaf*1e-6;
+    eta[2]=etab*1e-6;
+}
+
+//Extended correponding states calculation for saturation properties
+void CALLCONV FF_CorrespondingStatesSat(FF_SubstanceData *subs, FF_SubstanceData *ref, double *T, double result[2]){
+    int nPoints=1;
+    double Vl,lDens,target,T0,V0,lDens0,act,actPlus,der,error,lVisc0,ldVisc=0.0,ldVisc0=0.0,ldViscCorr=0.0,ldVisc0Corr=0.0,Vp,Vp0,lThC0=0.0,ldThC0=0.0,ldThC=0.0;
+    double Cp0=0.0,Cp=0.0;
+    double f=1.0,h=1.0,Fn=1.0;
+    double rhoMolar;
+    int i;
+    result[0]=0.0;
+    result[1]=0.0;
+
+    if ((subs->swData.eos>0)&&(ref->swData.eos>0)&&(subs->gViscCorr.form==112)){//Nist method with correction coef.
+        int eosType=FF_SWtype;
+        double tau,delta,Arr,Z,tau0,delta0,answerL[3],answerG[3],ArrDer[6];
+        char option='l';
+        char state;
+        double psi,eta[3];
+        FF_VpEOS(&eosType,T,&subs->swData,&Vp);
+        FF_VfromTPsw(T,&Vp,&subs->swData,&option,answerL,answerG,&state);
+        tau=subs->swData.tRef/ *T;
+        Vl=answerL[0];
+        delta=1/(Vl*subs->swData.rhoRef);
+        psi=subs->gViscCorr.coef[0]+delta*(subs->gViscCorr.coef[1]+delta*(subs->gViscCorr.coef[2]+delta*subs->gViscCorr.coef[3]));
+        FF_ArrZfromTVsw(T,&Vl,&subs->swData,&Arr,&Z);//Arr and Z to match
+        tau0=tau;//initial T for the reference
+        T0=ref->swData.tRef/tau0;
+        FF_VpEOS(&eosType,&T0,&ref->swData,&Vp0);
+        FF_VfromTPsw(&T0,&Vp0,&ref->swData,&option,answerL,answerG,&state);
+        V0=answerL[0];
+        delta0=1/(V0*ref->swData.rhoRef);
+        FF_ArrDerSW(&tau0,&delta0,&ref->swData,ArrDer);
+        printf("T:%f delta:%f Arr:%f, T0:%f Arr0:%f\n",*T,delta,Arr,T0,ArrDer[0]);
+        while (fabs(Arr-ArrDer[0])>0.002){
+            tau0=tau0+(Arr-ArrDer[0])/(1.5*ArrDer[3]);
+            T0=ref->swData.tRef/tau0;
+            FF_VpEOS(&eosType,&T0,&ref->swData,&Vp0);
+            FF_VfromTPsw(&T0,&Vp0,&ref->swData,&option,answerL,answerG,&state);
+            V0=answerL[0];
+            delta0=1/(V0*ref->swData.rhoRef);
+            FF_ArrDerSW(&tau0,&delta0,&ref->swData,ArrDer);
+            printf("Arr:%f, Z:%f T:%f T0:%f delta0:%f Arr0:%f Z0:%f\n",Arr,Z,*T,T0,delta0,ArrDer[0],1+delta0*ArrDer[1]);
+        }
+        rhoMolar=psi*delta0*ref->swData.rhoRef;
+        FF_ViscosityTDens(subs->gViscCorr.coef[5],&T0,&rhoMolar,eta);
+        printf("T0:%f P:%f psi:%f rhoMolar:%f Ideal:%f Friend:%f Batschinski:%f\n",T0,Vp0,psi,rhoMolar,eta[0],eta[1],eta[2]);
+        ldVisc0=eta[0];
+        lVisc0=eta[0]+eta[1]+eta[2];
+    }
+    else if((subs->vpCorr.form>0)&&(subs->lDensCorr.form>0)){
+        FF_PhysPropCorr(&subs->vpCorr.form,&subs->vpCorr.coef,&subs->baseProp.MW,&nPoints,T,&Vp);
+        FF_PhysPropCorr(&subs->lDensCorr.form,&subs->lDensCorr.coef,&subs->baseProp.MW,&nPoints,T,&lDens);
+        Vl=subs->baseProp.MW/lDens*1000;
+        target=*T*Vp*lDens*1000/subs->baseProp.MW;
+        //printf("T:%f Target:%f\n",*T,target);
+        T0=*T*ref->baseProp.Tc/subs->baseProp.Tc;
+        //printf("T:%f refTc:%f subsTc:%f\n",*T,ref->baseProp.Tc,subs->baseProp.Tc);
+        FF_PhysPropCorr(&ref->vpCorr.form,&ref->vpCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&Vp0);
+        FF_PhysPropCorr(&ref->lDensCorr.form,&ref->lDensCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&lDens0);
+        act=T0*Vp0*lDens0*1000/ref->baseProp.MW;
+        error=(target-act)/target;
+        //printf("T0:%f Actual:%f error:%f\n",T0,act,error);
+        i=0;
+        while ((fabs(error)>0.01)&&(i<10)){
+            T0=T0+0.01;
+            FF_PhysPropCorr(&ref->vpCorr.form,&ref->vpCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&Vp0);
+            FF_PhysPropCorr(&ref->lDensCorr.form,&ref->lDensCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&lDens0);
+            actPlus=T0*Vp0*lDens0*1000/ref->baseProp.MW;
+            der=(actPlus-act)/0.01;
+            if(der>0) T0=T0-0.01+0.6*error*target/der;
+            else break;
+            FF_PhysPropCorr(&ref->vpCorr.form,&ref->vpCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&Vp0);
+            FF_PhysPropCorr(&ref->lDensCorr.form,&ref->lDensCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&lDens0);
+            act=T0*Vp0*lDens0*1000/ref->baseProp.MW;
+            error=(target-act)/target;
+            //printf("T0:%f Actual:%f error:%f Previous der:%f\n",T0,act,error,der);
+            i++;
+        }
+        V0=ref->baseProp.MW/lDens0*1000;
+        if(ref->baseProp.Vc>0) FF_GasViscTVcpChung(&T0,&V0,&ref->baseProp,&ldVisc0,&ldVisc0Corr);//calculation of the ideal part of the reference
+        else if(ref->baseProp.Pc>0) FF_GasViscTPcpLucas(&T0,&Vp0,&ref->baseProp,&ldVisc0,&ldVisc0Corr);
+        else if(ref->gViscCorr.form>0) FF_PhysPropCorr(&ref->gViscCorr.form,ref->gViscCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&ldVisc0);
+        if (ref->lViscCorr.form>0){//total viscosity of the reference
+            FF_PhysPropCorr(&ref->lViscCorr.form,ref->lViscCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&lVisc0);
+        }
+    }
+    else return;
+
+    f=*T/T0;
+    h=Vl/V0;
+    Fn=pow((f*subs->baseProp.MW/ref->baseProp.MW),0.5)*pow(h,-0.66667);
+    if(subs->baseProp.Vc>0) FF_GasViscTVcpChung(T,&Vl,&subs->baseProp,&ldVisc,&ldViscCorr);//Calculation of ideal part of the target
+    else if(subs->baseProp.Pc>0)  FF_GasViscTPcpLucas(T,&Vp,&subs->baseProp,&ldVisc,&ldViscCorr);
+    else if(subs->gViscCorr.form>0) FF_PhysPropCorr(&subs->gViscCorr.form,subs->gViscCorr.coef,&subs->baseProp.MW,&nPoints,T,&ldVisc);
+    if((ldVisc>0)&&(ldVisc0>0)&&(lVisc0>0))  result[0]=Fn*(lVisc0-ldVisc0)+ldVisc;//Calculation of target viscosity
+    //printf("T:%f T0:%f f:%f h:%f Fn:%f ldVisc:%f ldVisc0:%f lVisc0:%f rVisc:%f lVisc:%f\n",*T,T0,f,h,Fn,ldVisc,ldVisc0,lVisc0,Fn*(lVisc0-ldVisc0),result[0]);
+
+    if (ref->lThCCorr.form>0){
+        FF_PhysPropCorr(&ref->lThCCorr.form,ref->lThCCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&lThC0);
+        if(ref->cp0Corr.form>0){
+            FF_PhysPropCorr(&ref->cp0Corr.form,ref->cp0Corr.coef,&ref->baseProp.MW,&nPoints,&T0,&Cp0);
+            FF_GasLpThCondTCpChung(&T0,&Cp0,&ref->baseProp,&ldThC0);
+        }
+        else if(ref->gThCCorr.form>0) FF_PhysPropCorr(&ref->gThCCorr.form,ref->gThCCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&ldThC0);
+        if(subs->cp0Corr.form>0){
+            FF_PhysPropCorr(&subs->cp0Corr.form,subs->cp0Corr.coef,&subs->baseProp.MW,&nPoints,T,&Cp);
+            FF_GasLpThCondTCpChung(T,&Cp,&subs->baseProp,&ldThC);
+        }
+        else if(subs->gThCCorr.form>0) FF_PhysPropCorr(&subs->gThCCorr.form,subs->gThCCorr.coef,&subs->baseProp.MW,&nPoints,T,&ldThC);
+        //result[1]=Fn*(lThC0-ldThC0)+ldThC;
+        result[1]=lThC0-ldThC0+ldThC;
+        //printf("T:%f T0:%f f:%f h:%f Fn:%f ldThC:%f ldThC0:%f lThC0:%f rThC:%f lThC:%f\n",*T,T0,f,h,Fn,ldThC,ldThC0,lThC0,Fn*(lThC0-ldThC0),result[1]);
+    }
+}
+
+//General extended correponding states calculation, using arr
+void CALLCONV FF_CorrespondingStates(FF_SubstanceData *subs, FF_SubstanceData *ref, double *T, double result[2]){
+    int nPoints=1;
+    int eosType=FF_NoType;
+    double answerL[3],answerG[3];
+    char option='l';
+    char state;
+    double Vl,lDens,target,tau,delta,Arr,Z,T0,V0,lDens0,delta0,tau0,act,actPlus,der,error,ArrDer[6],lVisc0,ldVisc=0.0,ldVisc0=0.0,ldViscCorr=0.0,ldVisc0Corr=0.0,Vp,Vp0,lThC0=0.0,ldThC0=0.0,ldThC=0.0;
+    double Cp0=0.0,Cp=0.0;
+    double f=1.0,h=1.0,Fn=1.0;
+    int i;
+    result[0]=0.0;
+    result[1]=0.0;
+    if ((subs->model==FF_SWtype)&&(ref->model==FF_SWtype)) eosType=FF_SWtype;
+    else if ((subs->model==FF_SAFTtype)&&(ref->model==FF_SAFTtype)) eosType=FF_SAFTtype;
+    else if ((subs->model==FF_CubicType)&&(ref->model==FF_CubicType)) eosType=FF_CubicType;
+    switch(eosType){
+
+    case FF_SWtype:
+        FF_VpEOS(&eosType,T,&subs->swData,&Vp);
+        FF_VfromTPsw(T,&Vp,&subs->swData,&option,answerL,answerG,&state);
+        tau=subs->swData.tRef/ *T;
+        Vl=answerL[0];
+        delta=1/(Vl*subs->swData.rhoRef);
+        FF_ArrZfromTVsw(T,&Vl,&subs->swData,&Arr,&Z);//Arr and Z to match
+        tau0=tau;//initial T for the reference
+        T0=ref->swData.tRef/tau0;
+        FF_VpEOS(&eosType,&T0,&ref->swData,&Vp0);
+        FF_VfromTPsw(&T0,&Vp0,&ref->swData,&option,answerL,answerG,&state);
+        V0=answerL[0];
+        delta0=1/(V0*ref->swData.rhoRef);
+        FF_ArrDerSW(&tau0,&delta0,&ref->swData,ArrDer);
+        printf("T:%f Arr:%f, T0:%f Arr0:%f\n",*T,Arr,T0,ArrDer[0]);
+        while (fabs(Arr-ArrDer[0])>0.002){
+            tau0=tau0+(Arr-ArrDer[0])/(1.5*ArrDer[3]);
+            T0=ref->swData.tRef/tau0;
+            FF_VpEOS(&eosType,&T0,&ref->swData,&Vp0);
+            FF_VfromTPsw(&T0,&Vp0,&ref->swData,&option,answerL,answerG,&state);
+            V0=answerL[0];
+            delta0=1/(V0*ref->swData.rhoRef);
+            FF_ArrDerSW(&tau0,&delta0,&ref->swData,ArrDer);
+            printf("Arr:%f, Z:%f T:%f T0:%f Arr0:%f Z0:%f\n",Arr,Z,*T,T0,ArrDer[0],1+delta0*ArrDer[1]);
+        }
+        break;
+    case FF_SAFTtype:
+        FF_VpEOS(&eosType,T,&subs->saftData,&Vp);
+        FF_VfromTPSAFT(T,&Vp,&subs->saftData,&option,answerL,answerG,&state);
+        Vl=answerL[0];
+        FF_ArrZfromTVSAFT(T,&Vl,&subs->saftData,&Arr,&Z);//Arr and Z to match
+        T0=*T*ref->baseProp.Tc/subs->baseProp.Tc;//Initial T for the reference
+        FF_VpEOS(&eosType,&T0,&ref->saftData,&Vp0);
+        FF_VfromTPSAFT(&T0,&Vp0,&ref->saftData,&option,answerL,answerG,&state);
+        V0=answerL[0];
+        FF_ArrDerSAFT(&T0,&V0,&ref->saftData,ArrDer);
+        //printf("Arr:%f, T:%f T0:%f ArrRef:%f\n",Arr,*T,T0,ArrDer[0]);
+        while (fabs(Arr-ArrDer[0])>0.002){
+            T0=T0+fabs(Arr-ArrDer[0])/(1.5*ArrDer[3]);
+            FF_VpEOS(&eosType,&T0,&ref->saftData,&Vp0);
+            FF_VfromTPSAFT(&T0,&Vp0,&ref->saftData,&option,answerL,answerG,&state);
+            V0=answerL[0];
+            FF_ArrDerSAFT(&T0,&V0,&ref->saftData,ArrDer);
+            printf("Arr:%f, Z:%f T:%f T0:%f rho0:%f ArrRef:%f Zref:%f\n",Arr,Z,*T,T0,1/V0,ArrDer[0],1-V0*ArrDer[1]);
+        }
+        break;
+    }
+    //V0=ref->baseProp.MW/lDens0*1000;
+
+    f=*T/T0;
+    h=Vl/V0;
+    Fn=pow((f*subs->baseProp.MW/ref->baseProp.MW),0.5)*pow(h,-0.66667);
+    //Fn=pow(f,1.0)*pow(subs->baseProp.MW/ref->baseProp.MW,1.0)*pow(h,-1.2);
+    if(ref->baseProp.Vc>0) FF_GasViscTVcpChung(&T0,&V0,&ref->baseProp,&ldVisc0,&ldVisc0Corr);
+    else if(ref->baseProp.Pc>0) FF_GasViscTPcpLucas(&T0,&Vp0,&ref->baseProp,&ldVisc0,&ldVisc0Corr);
+    else if(ref->gViscCorr.form>0) FF_PhysPropCorr(&ref->gViscCorr.form,ref->gViscCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&ldVisc0);
+    else return;
+    if(subs->baseProp.Vc>0) FF_GasViscTVcpChung(T,&Vl,&subs->baseProp,&ldVisc,&ldViscCorr);
+    else if(subs->baseProp.Pc>0)  FF_GasViscTPcpLucas(T,&Vp,&subs->baseProp,&ldVisc,&ldViscCorr);
+    else if(subs->gViscCorr.form>0) FF_PhysPropCorr(&subs->gViscCorr.form,subs->gViscCorr.coef,&subs->baseProp.MW,&nPoints,T,&ldVisc);
+    else return;
+    if (ref->lViscCorr.form>0){
+        FF_PhysPropCorr(&ref->lViscCorr.form,ref->lViscCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&lVisc0);
+        result[0]=Fn*(lVisc0-ldVisc0)+ldVisc;
+        //result[0]=Fn*lVisc0+ldVisc;
+        printf("T:%f T0:%f f:%f h:%f Fn:%f ldVisc:%f ldVisc0:%f lVisc0:%f rVisc:%f lVisc:%f\n",*T,T0,f,h,Fn,ldVisc,ldVisc0,lVisc0,Fn*(lVisc0-ldVisc0),result[0]);
+    }
+    if (ref->lThCCorr.form>0){
+        FF_PhysPropCorr(&ref->lThCCorr.form,ref->lThCCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&lThC0);
+        if(ref->cp0Corr.form>0){
+            FF_PhysPropCorr(&ref->cp0Corr.form,ref->cp0Corr.coef,&ref->baseProp.MW,&nPoints,&T0,&Cp0);
+            FF_GasLpThCondTCpChung(&T0,&Cp0,&ref->baseProp,&ldThC0);
+        }
+        else if(ref->gThCCorr.form>0) FF_PhysPropCorr(&ref->gThCCorr.form,ref->gThCCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&ldThC0);
+        if(subs->cp0Corr.form>0){
+            FF_PhysPropCorr(&subs->cp0Corr.form,subs->cp0Corr.coef,&subs->baseProp.MW,&nPoints,T,&Cp);
+            FF_GasLpThCondTCpChung(T,&Cp,&subs->baseProp,&ldThC);
+        }
+        else if(subs->gThCCorr.form>0) FF_PhysPropCorr(&subs->gThCCorr.form,subs->gThCCorr.coef,&subs->baseProp.MW,&nPoints,T,&ldThC);
+        //result[1]=Fn*(lThC0-ldThC0)+ldThC;
+        result[1]=lThC0-ldThC0+ldThC;
+        printf("T:%f T0:%f f:%f h:%f Fn:%f ldThC:%f ldThC0:%f lThC0:%f rThC:%f lThC:%f\n",*T,T0,f,h,Fn,ldThC,ldThC0,lThC0,Fn*(lThC0-ldThC0),result[1]);
     }
 }
