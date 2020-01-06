@@ -44,7 +44,7 @@ void CALLCONV FF_CorrelationResult(const int *eq,const double coef[],const int *
         for (i=0;i<*nPoints;i++) y[i]=coef[0]+x[i]*(coef[1]+x[i]*(coef[2]+x[i]*(coef[3]+x[i]*coef[4])));
         break;
     case FF_Polynomial://Polynomial a+b*T+c*T^2+d*T^3+e*T^4+f*T^5.Ideal gas heat capacity
-        for (i=0;i<*nPoints;i++) y[i]=coef[0]+coef[1]*x[i]+coef[2]*pow(x[i],2)+coef[3]*pow(x[i],3)+coef[4]*pow(x[i],4)+coef[5]*pow(x[i],2);
+        for (i=0;i<*nPoints;i++) y[i]=coef[0]+coef[1]*x[i]+coef[2]*pow(x[i],2)+coef[3]*pow(x[i],3)+coef[4]*pow(x[i],4)+coef[5]*pow(x[i],5);
         //printf("%f\n",y[0]);
         break;
     case FF_Polynomial2://Polynomial a+b*T^0.25+c*T^0.5+d*T+e*T^2+f*T^3.
@@ -149,6 +149,7 @@ void CALLCONV FF_CorrelationResult(const int *eq,const double coef[],const int *
             Tm=1-x[i]/coef[5];
             y[i]=coef[0]*exp((coef[1]*Tm+coef[2]*pow(Tm,1.5)+coef[3]*pow(Tm,2.5)+coef[4]*pow(Tm,5))/(1-Tm));
         }
+        break;
     case FF_Wagner36://Original Wagner equation. a*exp{(b*Tm+c*Tm^1.5+d*Tm^3+e*Tm^6)/(1-Tm)} with a=Pc, and Tm=1-T/f; f=Tc. Vapor pressure
         for (i=0;i<*nPoints;i++){
             Tm=1-x[i]/coef[5];
@@ -1427,7 +1428,7 @@ void CALLCONV FF_CorrespondingStatesSat(FF_SubstanceData *subs, FF_SubstanceData
         V0=answerL[0];
         delta0=1/(V0*ref->swData.rhoRef);
         FF_ArrDerSW(&tau0,&delta0,&ref->swData,ArrDer);
-        printf("T:%f delta:%f Arr:%f, T0:%f Arr0:%f\n",*T,delta,Arr,T0,ArrDer[0]);
+        //printf("T:%f delta:%f Arr:%f, T0:%f Arr0:%f\n",*T,delta,Arr,T0,ArrDer[0]);
         while (fabs(Arr-ArrDer[0])>0.002){
             tau0=tau0+(Arr-ArrDer[0])/(1.5*ArrDer[3]);
             T0=ref->swData.tRef/tau0;
@@ -1440,7 +1441,7 @@ void CALLCONV FF_CorrespondingStatesSat(FF_SubstanceData *subs, FF_SubstanceData
         }
         rhoMolar=psi*delta0*ref->swData.rhoRef;
         FF_ViscosityTDens(subs->gViscCorr.coef[5],&T0,&rhoMolar,eta);
-        printf("T0:%f P:%f psi:%f rhoMolar:%f Ideal:%f Friend:%f Batschinski:%f\n",T0,Vp0,psi,rhoMolar,eta[0],eta[1],eta[2]);
+        //printf("T0:%f P:%f psi:%f rhoMolar:%f Ideal:%f Friend:%f Batschinski:%f\n",T0,Vp0,psi,rhoMolar,eta[0],eta[1],eta[2]);
         ldVisc0=eta[0];
         lVisc0=eta[0]+eta[1]+eta[2];
     }
@@ -1542,7 +1543,7 @@ void CALLCONV FF_CorrespondingStates(FF_SubstanceData *subs, FF_SubstanceData *r
         V0=answerL[0];
         delta0=1/(V0*ref->swData.rhoRef);
         FF_ArrDerSW(&tau0,&delta0,&ref->swData,ArrDer);
-        printf("T:%f Arr:%f, T0:%f Arr0:%f\n",*T,Arr,T0,ArrDer[0]);
+        //printf("T:%f Arr:%f, T0:%f Arr0:%f\n",*T,Arr,T0,ArrDer[0]);
         while (fabs(Arr-ArrDer[0])>0.002){
             tau0=tau0+(Arr-ArrDer[0])/(1.5*ArrDer[3]);
             T0=ref->swData.tRef/tau0;
@@ -1551,7 +1552,7 @@ void CALLCONV FF_CorrespondingStates(FF_SubstanceData *subs, FF_SubstanceData *r
             V0=answerL[0];
             delta0=1/(V0*ref->swData.rhoRef);
             FF_ArrDerSW(&tau0,&delta0,&ref->swData,ArrDer);
-            printf("Arr:%f, Z:%f T:%f T0:%f Arr0:%f Z0:%f\n",Arr,Z,*T,T0,ArrDer[0],1+delta0*ArrDer[1]);
+            //printf("Arr:%f, Z:%f T:%f T0:%f Arr0:%f Z0:%f\n",Arr,Z,*T,T0,ArrDer[0],1+delta0*ArrDer[1]);
         }
         break;
     case FF_SAFTtype:
@@ -1571,7 +1572,7 @@ void CALLCONV FF_CorrespondingStates(FF_SubstanceData *subs, FF_SubstanceData *r
             FF_VfromTPSAFT(&T0,&Vp0,&ref->saftData,&option,answerL,answerG,&state);
             V0=answerL[0];
             FF_ArrDerSAFT(&T0,&V0,&ref->saftData,ArrDer);
-            printf("Arr:%f, Z:%f T:%f T0:%f rho0:%f ArrRef:%f Zref:%f\n",Arr,Z,*T,T0,1/V0,ArrDer[0],1-V0*ArrDer[1]);
+            //printf("Arr:%f, Z:%f T:%f T0:%f rho0:%f ArrRef:%f Zref:%f\n",Arr,Z,*T,T0,1/V0,ArrDer[0],1-V0*ArrDer[1]);
         }
         break;
     }
@@ -1593,7 +1594,7 @@ void CALLCONV FF_CorrespondingStates(FF_SubstanceData *subs, FF_SubstanceData *r
         FF_PhysPropCorr(&ref->lViscCorr.form,ref->lViscCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&lVisc0);
         result[0]=Fn*(lVisc0-ldVisc0)+ldVisc;
         //result[0]=Fn*lVisc0+ldVisc;
-        printf("T:%f T0:%f f:%f h:%f Fn:%f ldVisc:%f ldVisc0:%f lVisc0:%f rVisc:%f lVisc:%f\n",*T,T0,f,h,Fn,ldVisc,ldVisc0,lVisc0,Fn*(lVisc0-ldVisc0),result[0]);
+        //printf("T:%f T0:%f f:%f h:%f Fn:%f ldVisc:%f ldVisc0:%f lVisc0:%f rVisc:%f lVisc:%f\n",*T,T0,f,h,Fn,ldVisc,ldVisc0,lVisc0,Fn*(lVisc0-ldVisc0),result[0]);
     }
     if (ref->lThCCorr.form>0){
         FF_PhysPropCorr(&ref->lThCCorr.form,ref->lThCCorr.coef,&ref->baseProp.MW,&nPoints,&T0,&lThC0);
@@ -1609,6 +1610,6 @@ void CALLCONV FF_CorrespondingStates(FF_SubstanceData *subs, FF_SubstanceData *r
         else if(subs->gThCCorr.form>0) FF_PhysPropCorr(&subs->gThCCorr.form,subs->gThCCorr.coef,&subs->baseProp.MW,&nPoints,T,&ldThC);
         //result[1]=Fn*(lThC0-ldThC0)+ldThC;
         result[1]=lThC0-ldThC0+ldThC;
-        printf("T:%f T0:%f f:%f h:%f Fn:%f ldThC:%f ldThC0:%f lThC0:%f rThC:%f lThC:%f\n",*T,T0,f,h,Fn,ldThC,ldThC0,lThC0,Fn*(lThC0-ldThC0),result[1]);
+        //printf("T:%f T0:%f f:%f h:%f Fn:%f ldThC:%f ldThC0:%f lThC0:%f rThC:%f lThC:%f\n",*T,T0,f,h,Fn,ldThC,ldThC0,lThC0,Fn*(lThC0-ldThC0),result[1]);
     }
 }

@@ -1,3 +1,6 @@
+Version 1.5.1
+- Bugs correction, mainly in FFphysprop.c
+
 Version 1.5.0
 - Structure FF_SubstanceData (in FFbasic.h) enlarged: Longer name, and addition of refH and refS,.
 - New functions that allow EOS calculations passing a FF_SubstanceData structure.

@@ -88,6 +88,13 @@ void CALLCONV FF_OptCorrelation(unsigned nVar,double lb[],double ub[],char enfor
             var[i]=0;
         }
         break;
+    case FF_Polynomial:
+        for (i=0;i<nVar;i++){
+            lb[i]=-1e15;
+            ub[i]=1e15;
+            var[i]=0;
+        }
+        break;
     case FF_DIPPR100Ld:
         lb[0]=200;
         ub[0]=3000;

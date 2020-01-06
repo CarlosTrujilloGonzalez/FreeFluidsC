@@ -392,7 +392,9 @@ void CALLCONV FF_VfromTPcubic(const double *T,const double *P,const  FF_CubicPar
         resultL[0]=resultG[0]=Veos-param->c;//this is V
         resultL[1]=resultG[1]=param->Theta/(param->b*R* *T*(param->w-param->u))*log((Veos+ub)/(Veos+wb))+log(resultL[0]/(Veos-param->b));//This is Arr
         resultL[2]=resultG[2]=Z[0]*resultL[0]/Veos;//Z
-        if ((*T>=param->Tc)||(Z[0]>param->Zc)) *state='G';
+        if (*T>=param->Tc) *state='G';
+        else if (*P>=param->Pc) *state='L';
+        else if (Z[0]>=param->Zc) *state='G';
         else *state='L';
         //printf("Vl:%f\n",resultL[0]);
     }
@@ -3197,8 +3199,8 @@ void CALLCONV FF_ThermoEOS(const int *eosType,const void *data,const int *equati
     //printf("Residual T:%f V:%f P:%f Cvr:%f Cpr:%f Hr:%f Ur:%f Sr:%f Gr:%f Ar:%f\n",thR.T,thR.V,thR.P,thR.Cv,thR.Cp,thR.H,thR.U,thR.S,thR.G,thR.A);
 }
 
-//Thermodynamic properties calculation from T and V, from a reference state (specified by T and P) where H and S are 0
-//--------------------------------------------------------------------------------------------------------------------
+//Thermodynamic properties calculation from T and V, from a reference state (specified by T and P) where H and S are 0,using FF_SubstanceData
+//-------------------------------------------------------------------------------------------------------------------------------------------
 void CALLCONV FF_ThermoEOSs(const FF_SubstanceData *data, FF_ThermoProperties *th)
 {
      FF_ThermoProperties th0,thR;
@@ -3279,7 +3281,7 @@ void CALLCONV FF_ThermoEOSfromPX(const int *eosType,const void *data,const int *
     //printf("Tb:%f Vg:%f Vl:%f\n",Tb,thG.V,thL.V);
     FF_ThermoEOS(eosType,data,equation,coef,refT,refP,&thG);//and now the gas and liquid thermo properties at boiling point
     FF_ThermoEOS(eosType,data,equation,coef,refT,refP,&thL);
-    th->MW=thL.MW=thG.MW;
+    thL.MW=thG.MW=th->MW;
     int i=1;//only for printing
     if ((*var=='H')||(*var=='h')){
         if ((th->H > thL.H)&&(th->H < thG.H)) *liqFraction=(th->H-thG.H)/(thL.H-thG.H);
