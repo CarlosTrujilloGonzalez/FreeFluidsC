@@ -1,3 +1,9 @@
+Version 2.0.0
+- It is a main modification of the soft.
+- A lot of bugs have been solved, and new functions have been added.
+- Optimization routines for interaction parameters calculation have been added also.
+- SAFT VR Mie calculations have been eliminated, as the EOS performs clearly worse than PCSAFT.
+
 Version 1.5.1
 - Bugs correction, mainly in FFphysprop.c
 

@@ -13,7 +13,6 @@ PCSAFT eos:
 Includes PCSAFT with association term. Also Polar PCSAFT with dipolar term, both
 Gross and Vrabeck and Jog and Chapman models. but only the Gross and Vrabeck is implemented for mixtures. 
 CR-1 (Wolbach and Sandler modified) is used as mixing rule for mixtures.
-SAFT VR with Mie potential is also implemented, but only for pure substances.
 
 Multiparameter eos as per Schmidt and Wagner:
 Includes IAWPS95.The ideal gas contribution is implemented,except for IAPWS95, 
@@ -32,3 +31,4 @@ All the normal ones, mainly DIPPR.
 Optimization tools:
 For parameter finding, both for physical properties correlations and cubic 
 and PCSAFT eos.
+For binary interaction parameters calculation in EOS and liquid viscosity.

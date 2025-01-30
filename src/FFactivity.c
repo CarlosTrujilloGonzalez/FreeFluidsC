@@ -26,6 +26,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 #include "FFbasic.h"
 #include "FFeosPure.h"
 #include "FFactivity.h"
@@ -402,13 +403,18 @@ void FF_ActivityFloryHugginsM(const int *numSubs,const  FF_BaseProp baseProp[],c
 //In data, we receive for each substance, its composition in number of each subgroup. So each register is: id substance, id subgroup, num of ocurrences
 //for polymers the num of subgroups in data must be the multiplication of the monomer composition by the number of monomer units
 //In uni we answer all the calculations
-void CALLCONV FF_UNIFACParams(int numData, const int data[][3], FF_UnifacData *uni){
+void CALLCONV FF_UNIFACParams(int numData, const int data[][3], const char *resDir, FF_UnifacData *uni){
+    int ver=0;
+    char path1[FILENAME_MAX]="";
+    char path2[FILENAME_MAX]="";
+    strcat(path1,resDir);
+    strcat(path2,resDir);
     int i,j,k,newSubs,newSubg;
     //We need to count the different subgroups used, and to store their id
     int numSubgroups=0;
     //We need also to count the different substances, storing it original id
     int numSubs=0;
-    int substance[20];//Will contain the original id of the substances
+    int substance[20];//Will contain the original id(number of order) of the substances
     int numLines;//number of lines of interaction parameters file
     for (i=0;i<20;i++) for(j=0;j<30;j++) uni->subsSubg[i][j]=0;//We fill with 0 the conmposition of the substances in subgroups
     //We fill the first register with the first data
@@ -444,16 +450,23 @@ void CALLCONV FF_UNIFACParams(int numData, const int data[][3], FF_UnifacData *u
             numSubgroups++;
         }
         uni->subsSubg[j][k]=data[i][2];
-        //printf("Substance:%i Subgroup:%i Number:%i\n",j,k,uni->subsSubg[j][k]);
+        if (ver==1) printf("Substance:%i Subgroup:%i Number:%i\n",j,k,uni->subsSubg[j][k]);
     }
     //we recover from the corresponding file the subgroups information, and fill the subgroup and subgData table
     FILE *f;
     unsigned sg,g,g1,g2;
-    double r,q,A12,B12,C12,A21,B21,C21;
-    if (uni->model==FF_UNIFACStd) f=fopen("Data/UnifacSubgStd.txt","r");
+    double A12,B12,C12,A21,B21,C21;
+    double r,q;
+
+    /*if (uni->model==FF_UNIFACStd) f=fopen("Data/UnifacSubgStd.txt","r");
     else if ((uni->model==FF_UNIFACPSRK)||(uni->model==FF_EntropicFV)||(uni->model==FF_UNIFACZM)) f=fopen("Data/UnifacSubgPSRK.txt","r");
     else if (uni->model==FF_UNIFACDort) f=fopen("Data/UnifacSubgDort.txt","r");
-    else if (uni->model==FF_UNIFACNist) f=fopen("Data/UnifacSubgNist.txt","r");
+    else if (uni->model==FF_UNIFACNist) f=fopen("Data/UnifacSubgNist.txt","r");*/
+    if (uni->model==FF_UNIFACStd) strcat(path1,"Data/UnifacSubgStd.txt");
+    else if ((uni->model==FF_UNIFACPSRK)||(uni->model==FF_EntropicFV)||(uni->model==FF_UNIFACZM)) strcat(path1,"Data/UnifacSubgPSRK.txt");
+    else if (uni->model==FF_UNIFACDort) strcat(path1,"Data/UnifacSubgDort.txt");
+    else if (uni->model==FF_UNIFACNist) strcat(path1,"Data/UnifacSubgNist.txt");
+    f=fopen(path1,"r");
     for (i=0;i<numSubgroups;i++){
         do{
             fscanf(f,"%3lu%3lu%6lf%6lf\n",&sg,&g,&r,&q);
@@ -464,7 +477,7 @@ void CALLCONV FF_UNIFACParams(int numData, const int data[][3], FF_UnifacData *u
                 break;
             }
         } while (sg<300);
-        //printf("%i %i %i %f %f\n",i,uni->subgroup[i][0],uni->subgroup[i][1],uni->subgData[i][0],uni->subgData[i][1]);
+        if (ver==1) printf("Index:%i Subgroup:%i Group:%i r:%f q:%f\n",i,uni->subgroup[i][0],uni->subgroup[i][1],uni->subgData[i][0],uni->subgData[i][1]);
         rewind(f);
     }
     fclose(f);
@@ -479,19 +492,27 @@ void CALLCONV FF_UNIFACParams(int numData, const int data[][3], FF_UnifacData *u
     }
     if (uni->model==FF_UNIFACStd){
         numLines=635;
-        f=fopen("Data/UnifacInterStd.txt","r");
+        strcat(path2,"Data/UnifacInterStd.txt");
+        f=fopen(path2,"r");
+        if (f==NULL) printf("Error opening Data/UnifacInterStd.txt\n");
     }
     else if ((uni->model==FF_UNIFACPSRK)||(uni->model==FF_EntropicFV)||(uni->model==FF_UNIFACZM)){
         numLines=956;
-        f=fopen("Data/UnifacInterPSRK.txt","r");
+        strcat(path2,"Data/UnifacInterPSRK.txt");
+        f=fopen(path2,"r");
+        if (f==NULL) printf("Error opening Data/UnifacInterPSRK.txt\n");
     }
     else if ((uni->model==FF_UNIFACDort)){
         numLines=756;
-        f=fopen("Data/UnifacInterDort.txt","r");
+        strcat(path2,"Data/UnifacInterDort.txt");
+        f=fopen(path2,"r");
+        if (f==NULL) printf("Error opening data/UnifacInterDort.txt\n");
     }
     else if (uni->model==FF_UNIFACNist){
         numLines=1969;
-        f=fopen("Data/UnifacInterNist.txt","r");
+        strcat(path2,"Data/UnifacInterNist.txt");
+        f=fopen(path2,"r");
+        if (f==NULL) printf("Error opening data/UnifacInterNist.txt\n");
     }
     if (f==NULL) printf("Error\n");
     if (uni->model==FF_UNIFACStd){
@@ -500,11 +521,11 @@ void CALLCONV FF_UNIFACParams(int numData, const int data[][3], FF_UnifacData *u
                 if (uni->subgroup[i][1]<uni->subgroup[j][1]){
                     for(k=1;k<numLines;k++){
                         fscanf(f,"%03lu%03lu%10lf%10lf\n",&g1,&g2,&A12,&A21);
-                        //printf("%i %i %f %f\n",g1,g2,A12,A21);
+                        //if (ver==1) printf("%i %i %f %f\n",g1,g2,A12,A21);
                         if ((g1==uni->subgroup[i][1])&& (g2==uni->subgroup[j][1])){
                             uni->subgInt[i][j][0]=A12;
                             uni->subgInt[j][i][0]=A21;
-                            //printf("%i %i %f %f\n",g1,g2,uni->subgInt[i][j][0],uni->subgInt[j][i][0]);
+                            if (ver==1) printf("Unifac Std GroupA:%i GroupB:%i %f %f\n",g1,g2,uni->subgInt[i][j][0],uni->subgInt[j][i][0]);
                             break;
                         }
                     }
@@ -519,7 +540,7 @@ void CALLCONV FF_UNIFACParams(int numData, const int data[][3], FF_UnifacData *u
                 if (uni->subgroup[i][1]<uni->subgroup[j][1]){
                     for(k=1;k<numLines;k++){
                         fscanf(f,"%03lu%03lu%10lf%10lf%10lf%10lf%10lf%10lf\n",&g1,&g2,&A12,&B12,&C12,&A21,&B21,&C21);
-                        //printf("%i %i %f %f\n",g1,g2,A12,A21);
+                        //if (ver==1) printf("%i %i %f %f\n",g1,g2,A12,A21);
                         if ((g1==uni->subgroup[i][1])&& (g2==uni->subgroup[j][1])){
                             uni->subgInt[i][j][0]=A12;
                             uni->subgInt[i][j][1]=B12;
@@ -527,8 +548,8 @@ void CALLCONV FF_UNIFACParams(int numData, const int data[][3], FF_UnifacData *u
                             uni->subgInt[j][i][0]=A21;
                             uni->subgInt[j][i][1]=B21;
                             uni->subgInt[j][i][2]=C21;
-                            //printf("%i %i %f %f %f %f %f %f\n",g1,g2,uni->subgInt[i][j][0],uni->subgInt[i][j][1],uni->subgInt[i][j][2],
-                            //        uni->subgInt[j][i][0],uni->subgInt[j][i][1],uni->subgInt[j][i][2]);
+                            if (ver==1) printf("Unifac thermic GroupA:%i GroupB:%i %f %f %f %f %f %f\n",g1,g2,uni->subgInt[i][j][0],uni->subgInt[i][j][1],uni->subgInt[i][j][2],
+                                    uni->subgInt[j][i][0],uni->subgInt[j][i][1],uni->subgInt[j][i][2]);
                             break;
                         }
                     }
@@ -554,6 +575,7 @@ void CALLCONV FF_UNIFACParams(int numData, const int data[][3], FF_UnifacData *u
 //Calculates activity coefficients according to UNIFAC models, at given T and composition.
 //For polymers x q,r,FV are those of the polymer.
 void CALLCONV FF_ActivityUNIFAC(FF_UnifacData *data, const double *T, const double x[],FF_SubsActivityData actData[]){
+    int ver=0;
     int i,j,k;
     double aux;
     //Combinatorial part calculation
@@ -583,15 +605,15 @@ void CALLCONV FF_ActivityUNIFAC(FF_UnifacData *data, const double *T, const doub
                 actData[i].lnGammaC=1-phi[i]+log(phi[i]);
                 //lnGammaC[i]=log(phi[i])+5*data->subsQ[i]*log(theta[i]/phi[i])+data->subsL[i]-phi[i]*meanL;//alternative from Fredenslund
                 actData[i].lnGammaSG=-5*data->subsQ[i]*(1-phi[i]/theta[i]+log(phi[i]/theta[i]));
-                //printf("lnGammaC[%i]:%f dlnGammaC:%f\n",i,actData[i].lnGammaC,actData[i].dLnGammaC);
-                //printf("lnGammaSG[%i]:%f dlnGammaSG:%f\n",i,actData[i].lnGammaSG,actData[i].dLnGammaSG);
+                if (ver==1) printf("Unifac Std/PSRK lnGammaC[%i]:%f d\n",i,actData[i].lnGammaC);
+                if (ver==1) printf("Unifac Std/PSRK lnGammaSG[%i]:%f dlnGammaSG:%f\n",i,actData[i].lnGammaSG);
             }
     }
     else if((data->model==FF_EntropicFV)){
         for (i=0;i<data->numSubs;i++){
             actData[i].lnGammaC=1-phi[i]+log(phi[i]);
             actData[i].lnGammaSG=0;
-            //printf("gammaC[%i]:%f\n",i,exp(actData[i].lnGammaC));
+            if (ver==1) printf("Entropic FV gammaC[%i]:%f\n",i,exp(actData[i].lnGammaC));
         }
     }
     else if ((data->model==FF_UNIFACDort)||(data->model==FF_UNIFACNist)){
@@ -601,8 +623,8 @@ void CALLCONV FF_ActivityUNIFAC(FF_UnifacData *data, const double *T, const doub
             phi2[i]=pow(data->subsR[i],0.75)/meanR2;//Volume fraction /x[i]
             actData[i].lnGammaC=1-phi2[i]+log(phi2[i]);
             actData[i].lnGammaSG=-5*data->subsQ[i]*(1-phi[i]/theta[i]+log(phi[i]/theta[i]));
-            //printf("lnGammaC[%i]:%f dlnGammaC:%f\n",i,actData[i].lnGammaC,actData[i].dLnGammaC);
-            //printf("lnGammaSG[%i]:%f dlnGammaSG:%f\n",i,actData[i].lnGammaSG,actData[i].dLnGammaSG);
+            if (ver==1) printf("Unifac Dortmund/Nist lnGammaC[%i]:%f \n",i,actData[i].lnGammaC);
+            if (ver==1) printf("Unifac Dortmund/Nist llnGammaSG[%i]:%f \n",i,actData[i].lnGammaSG);
         }
     }
     else if (data->model==FF_UNIFACZM){
@@ -616,7 +638,7 @@ void CALLCONV FF_ActivityUNIFAC(FF_UnifacData *data, const double *T, const doub
             else phi2[i]=data->subsR[i]/meanR2;
             actData[i].lnGammaC=1-phi2[i]+log(phi2[i]);
             actData[i].lnGammaSG=-5*data->subsQ[i]*(1-phi[i]/theta[i]+log(phi[i]/theta[i]));
-            //printf("lnGammaC[%i]:%f\n",i,actData[i].lnGammaC);
+            if (ver==1) printf("Unifac ZM lnGammaC[%i]:%f\n",i,actData[i].lnGammaC);
         }
     }
     //Residual part calculation
@@ -625,10 +647,15 @@ void CALLCONV FF_ActivityUNIFAC(FF_UnifacData *data, const double *T, const doub
             substSubgrSum[data->numSubs][data->numSubg];
     if (data->model==FF_UNIFACStd){
         for (i=0;i<data->numSubg;i++) for (j=0;j<data->numSubg;j++) psi[i][j]=exp(-data->subgInt[i][j][0]/ *T);
+        if (ver==1) printf("Unifac standard subgroupA index:%i subgroupB index:%i psi:%f\n",i,j,psi[i][j]);
     }
     else if ((data->model==FF_UNIFACPSRK)||(data->model==FF_UNIFACDort)||(data->model==FF_UNIFACNist)||(data->model==FF_EntropicFV)||(data->model==FF_UNIFACZM)){
-        for (i=0;i<data->numSubg;i++) for (j=0;j<data->numSubg;j++) psi[i][j]=exp(-data->subgInt[i][j][0]/ *T -
-               data->subgInt[i][j][1] - data->subgInt[i][j][2]* *T);
+        for (i=0;i<data->numSubg;i++) for (j=0;j<data->numSubg;j++){
+            psi[i][j]=exp(-data->subgInt[i][j][0]/ *T - data->subgInt[i][j][1] - data->subgInt[i][j][2]* *T);
+            if (ver==1) printf("Unifac complex subgroupA index:%i subgroupB index:%i a:%f b:%f c:%f\n",i,j,data->subgInt[i][j][0],data->subgInt[i][j][1],
+                    data->subgInt[i][j][2]);
+            if (ver==1) printf("Unifac complex subgroupA index:%i subgroupB index:%i psi:%f\n",i,j,psi[i][j]);
+        }
     }
     //now the calculation of theta and lambda por each subgroup in each substance
     for (i=0;i<data->numSubs;i++){
@@ -672,12 +699,12 @@ void CALLCONV FF_ActivityUNIFAC(FF_UnifacData *data, const double *T, const doub
         actData[i].lnGammaR=0;
         for (j=0;j<data->numSubg;j++) actData[i].lnGammaR=actData[i].lnGammaR+data->subsSubg[i][j]*(subgrLambda[j]-substSubgrLambda[i][j]);
         actData[i].gamma=exp(actData[i].lnGammaC+actData[i].lnGammaSG+actData[i].lnGammaR);
-        //printf("lnGammaR[%i]:%f\n",i,actData[i].lnGammaR);
+        if (ver==1) printf("lnGammaR[%i]:%f\n",i,actData[i].lnGammaR);
     }
 }
 
 //Calculates activity coefficents according any of the defined models from a FF_MixData structure
-EXP_IMP void CALLCONV FF_Activity(FF_MixData *mix,double *T,double x[],FF_SubsActivityData actData[]){
+EXP_IMP void CALLCONV FF_Activity(FF_MixData *mix,const double *T,double x[],FF_SubsActivityData actData[]){
     int i;
     switch(mix->actModel){
     case FF_Wilson:
@@ -786,29 +813,29 @@ void CALLCONV FF_PhiAndActivity(FF_MixData *mix,const double *T,const double *P,
         case FF_SAFTtype:
             for(i=0;i<mix->numSubs;i++){
                 if(mix->baseProp[i].numMono<20){
-                    FF_VfromTPeos(&mix->eosType,T,P,&mix->saftData[i],&option,answerL,answerG,&state);
+                    FF_VfromTPeos(mix->eosType,*T,*P,&mix->saftData[i],option,answerL,answerG,&state);
                     phiL0[i]=exp(answerL[1]+answerL[2]-1)/answerL[2];
                     phi[i]=phiL0[i]*actData[i].gamma;
                 }
                 else phi[i]=0;
             }
             break;
-        case FF_SWtype:
+        /*case FF_SWtype:
             for(i=0;i<mix->numSubs;i++){
                 if(mix->baseProp[i].numMono<20){
-                    FF_VfromTPeos(&mix->eosType,T,P,&mix->swData[i],&option,answerL,answerG,&state);
+                    FF_VfromTPeos(mix->eosType,*T,*P,&mix->swData[i],option,answerL,answerG,&state);
                     phiL0[i]=exp(answerL[1]+answerL[2]-1)/answerL[2];
                     phi[i]=phiL0[i]*actData[i].gamma;
                 }
                 else phi[i]=0;
             }
-            break;
+            break;*/
         case FF_CubicType:
         case FF_CubicPRtype:
         case FF_CubicSRKtype:
             for(i=0;i<mix->numSubs;i++){
                 if(mix->baseProp[i].numMono<20){
-                    FF_VfromTPeos(&mix->eosType,T,P,&mix->cubicData[i],&option,answerL,answerG,&state);
+                    FF_VfromTPeos(mix->eosType,*T,*P,&mix->cubicData[i],option,answerL,answerG,&state);
                     phiL0[i]=exp(answerL[1]+answerL[2]-1)/answerL[2];
                     phi[i]=phiL0[i]*actData[i].gamma;
                     //printf("phiRef[%i]: %f\n",i,phiL0[i]);
@@ -826,9 +853,9 @@ void CALLCONV FF_PhiAndActivity(FF_MixData *mix,const double *T,const double *P,
         int nPoints=1;
         for(i=0;i<mix->numSubs;i++){
             if(mix->baseProp[i].numMono<20){
-                FF_PhysPropCorr(&mix->vpCorr[i].form,mix->vpCorr[i].coef,&mix->baseProp[i].MW,&nPoints,T,&Vp);
-                if(mix->lDensCorr[i].form>0) FF_PhysPropCorr(&mix->lDensCorr[i].form,mix->lDensCorr[i].coef,&mix->baseProp[i].MW,&nPoints,T,&lDens);
-                else FF_LiqDensSatRackett(&mix->baseProp[i],&Tref,&rhoRef,T,&lDens);
+                FF_PhysPropCorrM(mix->vpCorr[i].form,mix->vpCorr[i].coef,mix->baseProp[i].MW,*T,&Vp);
+                if(mix->lDensCorr[i].form>0) FF_PhysPropCorrM(mix->lDensCorr[i].form,mix->lDensCorr[i].coef,mix->baseProp[i].MW,*T,&lDens);
+                else FF_LiqDensSatRackett(&mix->baseProp[i],Tref,rhoRef,*T,&lDens);
               //printf("Vp:%f\n",Vp);
                 phi[i]=actData[i].gamma*Vp/ *P*exp(mix->baseProp[i].MW*0.001*(*P-Vp)/(lDens*R* *T));
             }
@@ -857,29 +884,29 @@ void CALLCONV FF_PhiFromActivity(FF_MixData *mix,const double *T,const double *P
         case FF_SAFTtype:
             for(i=0;i<mix->numSubs;i++){
                 if(mix->baseProp[i].numMono<20){
-                    FF_VfromTPeos(&mix->eosType,T,P,&mix->saftData[i],&option,answerL,answerG,&state);
+                    FF_VfromTPeos(mix->eosType,*T,*P,&mix->saftData[i],option,answerL,answerG,&state);
                     phiL0[i]=exp(answerL[1]+answerL[2]-1)/answerL[2];
                     phi[i]=phiL0[i]*actData[i].gamma;
                 }
                 else phi[i]=0;
             }
             break;
-        case FF_SWtype:
+        /*case FF_SWtype:
             for(i=0;i<mix->numSubs;i++){
                 if(mix->baseProp[i].numMono<20){
-                    FF_VfromTPeos(&mix->eosType,T,P,&mix->swData[i],&option,answerL,answerG,&state);
+                    FF_VfromTPeos(mix->eosType,*T,*P,&mix->swData[i],option,answerL,answerG,&state);
                     phiL0[i]=exp(answerL[1]+answerL[2]-1)/answerL[2];
                     phi[i]=phiL0[i]*actData[i].gamma;
                 }
                 else phi[i]=0;
             }
-            break;
+            break;*/
         case FF_CubicType:
         case FF_CubicPRtype:
         case FF_CubicSRKtype:
             for(i=0;i<mix->numSubs;i++){
                 if(mix->baseProp[i].numMono<20){
-                    FF_VfromTPeos(&mix->eosType,T,P,&mix->cubicData[i],&option,answerL,answerG,&state);
+                    FF_VfromTPeos(mix->eosType,*T,*P,&mix->cubicData[i],option,answerL,answerG,&state);
                     phiL0[i]=exp(answerL[1]+answerL[2]-1)/answerL[2];
                     phi[i]=phiL0[i]*actData[i].gamma;
                     //printf("phiRef[%i]: %f\n",i,phiL0[i]);
@@ -894,14 +921,13 @@ void CALLCONV FF_PhiFromActivity(FF_MixData *mix,const double *T,const double *P
     //It makes sense only if assuming that reference fugacity is Vp
     else{
         double Vp,lDens,Tref,rhoRef;
-        int nPoints=1;
         for(i=0;i<mix->numSubs;i++){
             if(mix->baseProp[i].numMono<20){
-                FF_PhysPropCorr(&mix->vpCorr[i].form,mix->vpCorr[i].coef,&mix->baseProp[i].MW,&nPoints,T,&Vp);
+                FF_PhysPropCorrM(mix->vpCorr[i].form,mix->vpCorr[i].coef,mix->baseProp[i].MW,*T,&Vp);
                 if(mix->lDensCorr[i].form>0){
-                    FF_PhysPropCorr(&mix->lDensCorr[i].form,mix->lDensCorr[i].coef,&mix->baseProp[i].MW,&nPoints,T,&lDens);
+                    FF_PhysPropCorrM(mix->lDensCorr[i].form,mix->lDensCorr[i].coef,mix->baseProp[i].MW,*T,&lDens);
                 }
-                else FF_LiqDensSatRackett(&mix->baseProp[i],&Tref,&rhoRef,T,&lDens);
+                else FF_LiqDensSatRackett(&mix->baseProp[i],Tref,rhoRef,*T,&lDens);
               //printf("Vp:%f\n",Vp);
                 phi[i]=actData[i].gamma*Vp/ *P*exp(mix->baseProp[i].MW*0.001*(*P-Vp)/(lDens*R* *T));
             }
@@ -966,12 +992,16 @@ void CALLCONV FF_ActivityDerivatives(const int *actModel,const int *numSubs,cons
     double Tplus=*T+0.01;//Values after increment of T
     double hE;
     FF_SubsActivityData actDataPlus[*numSubs];//Where to store the activity coeff. after incrementing x[i] or T
-    void (*ActCalc)(int *,FF_BaseProp *,double *,int *,double *,double *,FF_SubsActivityData *);
-    if (*actModel==FF_UNIQUAC) ActCalc=&FF_ActivityUNIQUAC;
+    /*void (*ActCalc)(int *,FF_BaseProp *,double *,int *,double *,double *,FF_SubsActivityData *);
+    if (*actModel==FF_UNIQUAC) ActCalc=FF_ActivityUNIQUAC;
     else if (*actModel==FF_NRTL) ActCalc=&FF_ActivityNRTL;
-    else if (*actModel==FF_Wilson) ActCalc=&FF_ActivityWilson;
+    else if (*actModel==FF_Wilson) ActCalc=&FF_ActivityWilson;*/
+
     //Calculation of the ln of activity coefficients combinatorial, SG and residual
-    ActCalc(numSubs,baseProp,pintParam,form,T,x,actData);
+    //ActCalc(numSubs,baseProp,pintParam,form,T,x,actData);
+    if (*actModel==FF_UNIQUAC) FF_ActivityUNIQUAC(numSubs,baseProp,pintParam,form,T,x,actData);
+    else if (*actModel==FF_NRTL) FF_ActivityNRTL(numSubs,baseProp,pintParam,form,T,x,actData);
+    else if (*actModel==FF_Wilson)FF_ActivityWilson(numSubs,baseProp,pintParam,form,T,x,actData);
     //Calculation of excess g for combinatorial, Sg and residual parts
     for(i=0;i<*numSubs;i++){
         excData->gEC=excData->gEC+x[i]*actData[i].lnGammaC;
@@ -985,7 +1015,10 @@ void CALLCONV FF_ActivityDerivatives(const int *actModel,const int *numSubs,cons
     for (i=0;i<*numSubs;i++){
         gECplus=gESGplus=gERplus=0;
         xPlus[i]=x[i]*1.001;
-        ActCalc(numSubs,baseProp,pintParam,form,T,xPlus,actDataPlus);
+        //ActCalc(numSubs,baseProp,pintParam,form,T,xPlus,actDataPlus);
+        if (*actModel==FF_UNIQUAC) FF_ActivityUNIQUAC(numSubs,baseProp,pintParam,form,T,xPlus,actDataPlus);
+        else if (*actModel==FF_NRTL) FF_ActivityNRTL(numSubs,baseProp,pintParam,form,T,xPlus,actDataPlus);
+        else if (*actModel==FF_Wilson)FF_ActivityWilson(numSubs,baseProp,pintParam,form,T,xPlus,actDataPlus);
         for (j=0;j<*numSubs;j++){
             gECplus=gECplus+xPlus[j]*actDataPlus[j].lnGammaC;
             gESGplus=gESGplus+xPlus[j]*actDataPlus[j].lnGammaSG;
@@ -997,7 +1030,10 @@ void CALLCONV FF_ActivityDerivatives(const int *actModel,const int *numSubs,cons
         xPlus[i]=x[i];
     }
     //Calculation of act. coef. a somewhat higher temp.
-    ActCalc(numSubs,baseProp,pintParam,form,&Tplus,x,actDataPlus);
+    //ActCalc(numSubs,baseProp,pintParam,form,&Tplus,x,actDataPlus);
+    if (*actModel==FF_UNIQUAC) FF_ActivityUNIQUAC(numSubs,baseProp,pintParam,form,&Tplus,x,actDataPlus);
+    else if (*actModel==FF_NRTL) FF_ActivityNRTL(numSubs,baseProp,pintParam,form,&Tplus,x,actDataPlus);
+    else if (*actModel==FF_Wilson)FF_ActivityWilson(numSubs,baseProp,pintParam,form,&Tplus,x,actDataPlus);
     gEplus=0;
     for (i=0;i<*numSubs;i++) gEplus=gEplus+x[i]*(actDataPlus[i].lnGammaC+actDataPlus[i].lnGammaSG+actDataPlus[i].lnGammaR);
     excData->dgE_dT=((gEplus)-(excData->gE))/(Tplus- *T);

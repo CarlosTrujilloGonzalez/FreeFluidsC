@@ -26,19 +26,20 @@
 //===============================================
 #include <math.h>
 #include <stdio.h>
-#include <nlopt.h>
+//#include <nlopt.h>
 #include <time.h>
-#include<stdlib.h>
+#include <stdlib.h>
+#include <string.h>
 #include "FFbasic.h"
 #include "FFeosPure.h"
 #include "FFeosMix.h"
 #include "FFequilibrium.h"
 
-#include "FFtools.h"
+//#include "FFtools.h"
 
 //Calculation of the tangent plane distance for a test composition,regarding a base one. data.z in mol fraction and coef in mole number
 double CALLCONV FF_TPD(unsigned nVar, const double coef[], double grad[], FF_FeedData *data){
-    int i,equal;
+    unsigned int i,equal;
     double xTotal,x[nVar],y[nVar],answerL[3],answerG[3],gA,gE;
     double substPhiA[nVar],substPhiE[nVar],tpd;
     char option,state;
@@ -65,7 +66,7 @@ double CALLCONV FF_TPD(unsigned nVar, const double coef[], double grad[], FF_Fee
                 FF_MixVfromTPeos(data->mix,&data->T,&data->P,x,&option,answerL,answerG,&state);
                 if((state=='L')||(state=='l')||(state=='U')||(state=='u')) option='l';
                 else if((state=='G')||(state=='g')) option='g';
-                else return;
+                else return 0.0;
             }
             else option='g';
             FF_MixPhiEOS(data->mix,&data->T,&data->P,x,&option,substPhiE);
@@ -83,7 +84,7 @@ double CALLCONV FF_TPD(unsigned nVar, const double coef[], double grad[], FF_Fee
                 tpd=tpd+x[i]*(log(x[i]*substPhiE[i])-data->logSubstFugacity[i]);
             }
         }
-        printf("tpd found:%f\n",tpd);
+        //printf("tpd found:%f\n",tpd);
         return tpd;
     }
 }
@@ -95,7 +96,7 @@ void CALLCONV FF_StabilityCheck(FF_FeedData *data,double *tpd,double tpdX[]){
     nVar=data->mix->numSubs;
     double answerL[3],answerG[3],substPhi[nVar],substPhiA[nVar],substPhiE[nVar],xTotal,gA,gE;
     //printf("nVar:%i\n",nVar);
-    int i,code;
+    unsigned int i, code;
     FF_SubsActivityData actData[nVar];
 
     //Calculation of the reference Gibbs energy
@@ -396,7 +397,7 @@ void CALLCONV FF_StabilityCheckSA(FF_FeedData *data,double *tpd,double tpdX[]){
                 step=step*stepCorr;
                 if (step>1) step=1;
                 //for(i=0;i<nVar;i++) step[i]=step[i]*stepCorr;
-                printf("New step:%f stepCorr mult:%f\n",step,stepCorr);
+                //printf("New step:%f stepCorr mult:%f\n",step,stepCorr);
             }
             else if(accept<p2){
                 stepCorr=1+2*(p2-accept)/p2;
@@ -547,7 +548,7 @@ void CALLCONV FF_RachfordRiceSolver(FF_MixData *mix,const double *T,const double
 
 
 //Mixture bubble pressure calculation, given T, composition, and thermo model to use
-void CALLCONV FF_BubbleP(FF_MixData *mix,const double *T, const double x[],const double *bPguess, double *bP,double y[],double substPhiL[],double substPhiG[]){
+void CALLCONV FF_BubblePtpdg(FF_MixData *mix,const double *T, const double x[],const double *bPguess, double *bP,double y[],double substPhiL[],double substPhiG[]){
     FF_CubicParam param;
     FF_SubsActivityData actData[mix->numSubs];
     *bP=0;
@@ -585,96 +586,101 @@ void CALLCONV FF_BubbleP(FF_MixData *mix,const double *T, const double x[],const
         //As BIP are for activity not use them in the eos
         if(mix->mixRule==FF_VdW) mix->mixRule=FF_VdWnoInt;
 
+        //now the approximation of molar fractions and P
+        P=0;
+        double Vp;
+        for(i=0;i<mix->numSubs;i++){
+            FF_PhysPropCorrM(mix->vpCorr[i].form,mix->vpCorr[i].coef,mix->baseProp[i].MW,*T,&Vp);
+            //printf("Vp[%i]: form:%i %f\n",i,mix->vpCorr[i].form,Vp);
+            P=P+x[i]*actData[i].gamma*Vp;//This is the initial P.
+        }
+        //printf("Approximate P from activity: %f\n",P);
+        yTotal=0;
+        for(i=0;i<mix->numSubs;i++){
+            y[i]=x[i]*actData[i].gamma*Vp/P;//considering phi of gas=1 and not using Poynting factor
+            yTotal=yTotal+y[i];
+            //printf("y[%i] :%f\n",i,y[i]);
+        }
+        //printf("yTotal: %f\n",yTotal);
+        //y[i] is already normalized
+        if (*bPguess!=0) P=*bPguess;//if a P guess is given we take it
+
     }
     //As a comment: if cubic EOS, we can get the parameters for the liquid phase and use them in all the calculation. We can gain some speed here
-    if((mix->thModelActEos==1)&&(*bPguess==0)){  //If phi-phi without guess
-        P=Pmax*0.5;  //initialize P
-        double yLow,yHigh,tpdg,tpdgMin,tpdgMax;
-        yLow=0.65;
-        yHigh=0.999;
-        tpdgMin=0.0005;
-        tpdgMax=0.002;
-        do{  //bisection approximation using k values from liquid fugacity calculation
-            //printf("P:%f\n",P);
-            option='l';
-            FF_MixPhiEOS(mix,T,&P,x,&option,substPhiL);  //phi of liquid phase
-            for (i=0;i<mix->numSubs;i++){ //Initialization of phi of gas phase
-                substPhiG[i]=1.0;
-            }
-            for(j=0;j<3;j++){
-                yTotal=0;
-                for (i=0;i<mix->numSubs;i++){  //ks and concentrations calculation
-                    //k[i]=exp(log(mix->baseProp[i].Pc/ P)+5.373*(1+mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ *T));
-                    k[i]=substPhiL[i]/substPhiG[i];
-                    y[i]=x[i]*k[i];
-                    yTotal=yTotal+y[i];
+    else if(mix->thModelActEos==1){  //If phi-phi
+        if (*bPguess==0){
+            P=Pmax*0.5;  //initialize P
+            double yLow,yHigh,tpdg,tpdgMin,tpdgMax;
+            yLow=0.64;//0.75;//0.65;
+            yHigh=0.9999;
+            tpdgMin=0.0005;//0.0005;
+            tpdgMax=0.002;//0.002;
+            do{  //bisection approximation using k values from liquid fugacity calculation
+                //printf("P:%f\n",P);
+                option='l';
+                FF_MixPhiEOS(mix,T,&P,x,&option,substPhiL);  //phi of liquid phase
+                for (i=0;i<mix->numSubs;i++){ //Initialization of phi of gas phase
+                    substPhiG[i]=1.0;
                 }
-                for (i=0;i<mix->numSubs;i++){  //Normalization
-                    y[i]=y[i]/yTotal;
+                for(j=0;j<5;j++){
+                    yTotal=0;
+                    for (i=0;i<mix->numSubs;i++){  //ks and concentrations calculation
+                        //k[i]=exp(log(mix->baseProp[i].Pc/ P)+5.373*(1+mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ *T));
+                        k[i]=substPhiL[i]/substPhiG[i];
+                        y[i]=x[i]*k[i];
+                        yTotal=yTotal+y[i];
+                    }
+                    for (i=0;i<mix->numSubs;i++){  //Normalization
+                        y[i]=y[i]/yTotal;
+                    }
+                    option='g';  //Phi gas and tpd calculation
+                    FF_MixPhiEOS(mix,T,&P,y,&option,substPhiG);
+                    tpdg=0;
+                    for(i=0;i<mix->numSubs;i++){
+                        tpdg=tpdg+y[i]*(log(y[i])+log(substPhiG[i])-log(x[i])-log(substPhiL[i]));
+                    }
+                    //printf("x[0]:%f P:%f yTotal:%f y[0]:%f tpdg:%f\n",x[0],P,yTotal,y[0],tpdg);
+                    if(yTotal<yLow) break; //Trying to avoid to find another liquid root that would bring yTotal=1
+                    if (tpdg<=0) break;  //can save some calculations
+                 }
+                if((tpdg>tpdgMax)||(yTotal<yLow)){//probably we are too much over the bubble pressure
+                    P=P-Pmax/n;
+                    n=n*2;
                 }
-                option='g';  //Phi gas and tpd calculation
-                FF_MixPhiEOS(mix,T,&P,y,&option,substPhiG);
-                tpdg=0;
-                for(i=0;i<mix->numSubs;i++){
-                    tpdg=tpdg+y[i]*(log(y[i])+log(substPhiG[i])-log(x[i])-log(substPhiL[i]));
+                else if((tpdg<tpdgMin)||(yTotal>yHigh)){
+                    P=P+Pmax/n;
+                    n=n*2;
                 }
-                //printf("x[0]:%f P:%f yTotal:%f y[0]:%f tpdg:%f\n",x[0],P,yTotal,y[0],tpdg);
-                if(yTotal<yLow) break; //Trying to avoid to find another liquid root that would bring yTotal=1
-                if (tpdg<0) break;  //can save some calculations
-             }
-            if((tpdg>tpdgMax)||(yTotal<yLow)){//probably we are too much over the bubble pressure
-                P=P-Pmax/n;
-                n=n*2;
-            }
-            else if((tpdg<tpdgMin)||(yTotal>yHigh)){
-                P=P+Pmax/n;
-                n=n*2;
-            }
-            counter++;
-            //printf("x[0]:%f Counter:%i n:%i yTotal:%f New P:%f tpdg:%f\n",x[0],counter,n,yTotal,P,tpdg);
-            if(counter>15) break;
-        } while((tpdg<tpdgMin)||(tpdg>tpdgMax)||(yTotal<yLow)||(yTotal>yHigh));
-    //printf("x[0]:%f Counter:%i n:%i yTotal:%f P:%f tpdg:%f\n",x[0],counter,n,yTotal,P,tpdg);
-    }
-    else{   //If we got a guess from the user or we are using gamma-phi
-        if(*bPguess!=0){  //we got a guess
+                counter++;
+                //printf("x[0]:%f Counter:%i n:%i yTotal:%f New P:%f tpdg:%f\n",x[0],counter,n,yTotal,P,tpdg);
+                if(counter>15) break;
+            } while((tpdg<tpdgMin)||(tpdg>tpdgMax)||(yTotal<yLow)||(yTotal>yHigh));
+            //y[i] could be not normalized
+            //printf("x[0]:%f Counter:%i n:%i yTotal:%f P:%f tpdg:%f\n",x[0],counter,n,yTotal,P,tpdg);
+
+        }
+        else{ //P guessed and phi-phi
             P=*bPguess;
-            //option='l';
-            //FF_MixPhiEOS(mix,T,&P,x,&option,substPhiL);
+            option='l';
+            FF_MixPhiEOS(mix,T,&P,x,&option,substPhiL);
             yTotal=0;
             for (i=0;i<mix->numSubs;i++){
-                y[i]=x[i]*exp(log(mix->baseProp[i].Pc/ P)+5.373*(1+mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ *T));
-                //y[i]=x[i]*substPhiL[i];  //Alternative for phi. alternative for gamma needed
+                //y[i]=x[i]*exp(log(mix->baseProp[i].Pc/ P)+5.373*(1+mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ *T));
+                y[i]=x[i]*substPhiL[i];  //Alternative for phi. alternative for gamma needed
                 yTotal=yTotal+y[i];
                 //printf("k[%i]:%f\n",i,k[i]);
             }
-            for (i=0;i<mix->numSubs;i++){
-                y[i]=y[i]/yTotal; //  normalization
-                printf("Pguess:%f y[%i];%f\n",P,i,y[i]);
-            }
-            printf("P guess:%f yTotal:%f\n",P,yTotal);
+            //y[i] is not normalized
+            //printf("P guess:%f yTotal:%f\n",P,yTotal);
+            //If we got a guess from the user and we are using phi-phi
         }
-        else{  //we are using gamma-phi
-            P=0;
-            double Vp[mix->numSubs];
-            int nPoints=1;
-            for(i=0;i<mix->numSubs;i++){
-                if(mix->refVpEos==0) FF_PhysPropCorr(&mix->vpCorr[i].form,mix->vpCorr[i].coef,&mix->baseProp[i].MW,&nPoints,T,&Vp[i]);
-                else{
-                        if(mix->eosType==FF_SAFTtype) FF_VpEOS(&mix->eosType,T,&mix->saftData[i],&Vp[i]);
-                        else FF_VpEOS(&mix->eosType,T,&mix->cubicData[i],&Vp[i]);
-                    }
-                FF_PhysPropCorr(&mix->vpCorr[i].form,mix->vpCorr[i].coef,&mix->baseProp[i].MW,&nPoints,T,&Vp);
-                //printf("Vp[%i]: form:%i %f\n",i,mix->vpCorr[i].form,Vp);
-                P=P+x[i]*actData[i].gamma*Vp[i];  //This is the initial P
-            }
-            yTotal=1;
-            for (i=0;i<mix->numSubs;i++){
-                y[i]=x[i]*actData[i].gamma*Vp[i]/P;
-                printf("Pguess:%f y[%i];%f\n",P,i,y[i]);
-            }
+
+        for (i=0;i<mix->numSubs;i++){
+            y[i]=y[i]/yTotal; //we normalize y in order to obtain molar fractions
+            //printf("initial composition: i[%i] y:%f yTotal: %f\n",i,y[i],yTotal);
         }
     }
+
 
     do{
         P = P *(1+yTotal)*0.5;
@@ -715,8 +721,7 @@ void CALLCONV FF_BubbleP(FF_MixData *mix,const double *T, const double x[],const
             if (counter>100) return;
         }
         //printf("counter:%i P:%f yTotal:%f dyTotal:%f\n",counter,P,yTotal,dyTotal);
-    } while (fabs(yTotal - 1) > 0.001);
-
+    } while (fabs(yTotal - 1) > 0.0002);
     //check that the phases are different
     double answerL[3],answerG[3],Vl,Vdiff,Ydiff=0;
     option='l';
@@ -734,18 +739,18 @@ void CALLCONV FF_BubbleP(FF_MixData *mix,const double *T, const double x[],const
 }
 
 
-//Mixture bubble pressure calculation, given T, composition, and thermo model to use
-void CALLCONV FF_BubbleP1(FF_MixData *mix,const double *T, const double x[],const double *bPguess, double *bP,double y[],double substPhiL[],double substPhiG[]){
+//Mixture bubble pressure calculation, given T, composition, and thermo model to use. Fast but not as good as FF_BubbleP
+void CALLCONV FF_BubbleP(FF_MixData *mix,const double *T, const double x[],const double *bPguess, double *bP,double y[],double substPhiL[],double substPhiG[]){
+    int ver=0;
     FF_CubicParam param;
     FF_SubsActivityData actData[mix->numSubs];
     *bP=0;
-    double Pmax=400e5;//This is the maximum computable pressure
     double P,xTotal;
     double k[mix->numSubs],newY[mix->numSubs],yTotal,dyTotal;
-    int i=0,j,n=4,counter=0;
+    int i=0,counter=0;
     char option,state;
-    //If the liquid model is based only on activity all components must be below the critical temperature, and we need activity data
-    if(mix->thModelActEos==0){
+
+    if(mix->thModelActEos==0){//If the liquid model is based only on activity all components must be below the critical temperature, and we need activity data
         for(i=0;i<mix->numSubs;i++){
             if(*T>mix->baseProp[i].Tc){
                 *bP=0;
@@ -770,88 +775,102 @@ void CALLCONV FF_BubbleP1(FF_MixData *mix,const double *T, const double x[],cons
             FF_Activity(mix,T,x,actData);
             break;
         }
+        P=0;
+        double Vp;
+        for(i=0;i<mix->numSubs;i++){
+            FF_PhysPropCorrM(mix->vpCorr[i].form,mix->vpCorr[i].coef,mix->baseProp[i].MW,*T,&Vp);
+            //printf("Vp[%i]: form:%i %f\n",i,mix->vpCorr[i].form,Vp);
+            P=P+x[i]*actData[i].gamma*Vp;//This is the initial P.
+        }
+        //printf("Approximate P from activity: %f\n",P);
+        yTotal=0;
+        for(i=0;i<mix->numSubs;i++){
+            y[i]=x[i]*actData[i].gamma*Vp/P;//considering phi of gas=1 and not using Poynting factor
+            yTotal=yTotal+y[i];
+            //printf("y[%i] :%f\n",i,y[i]);
+        }
+        //printf("yTotal: %f\n",yTotal);
+        //y[i] is already normalized
+        if (*bPguess!=0) P=*bPguess;//if a P guess is given we take it
         //As BIP are for activity not use them in the eos
         if(mix->mixRule==FF_VdW) mix->mixRule=FF_VdWnoInt;
-
     }
     //As a comment: if cubic EOS, we can get the parameters for the liquid phase and use them in all the calculation. We can gain some speed here
 
-
-    if(*bPguess==0){  //We need to approximate the bubble pressure
-        //If activity and Vp are used for the liquid it is easy
-        if((mix->thModelActEos==0)&&(mix->refVpEos==0)){
-            P=0;
-            double Vp;
-            int nPoints=1;
-            for(i=0;i<mix->numSubs;i++){
-                FF_PhysPropCorr(&mix->vpCorr[i].form,mix->vpCorr[i].coef,&mix->baseProp[i].MW,&nPoints,T,&Vp);
-                //printf("Vp[%i]: form:%i %f\n",i,mix->vpCorr[i].form,Vp);
-                P=P+x[i]*actData[i].gamma*Vp;//This is the initial P
-            }
-            //printf("Approximate P from activity: %f\n",P);
-            yTotal=0;
-            for(i=0;i<mix->numSubs;i++){
-                y[i]=x[i]*actData[i].gamma*Vp/P;//considering phi of gas=1 and not using Poynting factor
-                yTotal=yTotal+y[i];
-                //printf("y[%i] :%f\n",i,y[i]);
-            }
-            //printf("yTotal: %f\n",yTotal);
-        }
-
-        else{   //If an EOS is used
+    else {//using and EOS for the liquid phase
+        if(*bPguess==0){//We need to approximate the bubble pressure and gas composition
             //initialize P
-            P=Pmax*0.5;
-            double yLow,yHigh,tpdg;
-            do{//bisection approximation using k values from Wilson equation and/or liquid fugacity calculation
-                //printf("P:%f\n",P);
-                yLow=0.5;
-                yHigh=0.85;
-                xTotal=0;
+            P=0.0;
+            for (i=0;i<mix->numSubs;i++) P=P+x[i]*mix->baseProp[i].Pc;
+            P=P*1.3;
+            double Plow,Phigh,sumLow,sumHigh,Pnew;
+            double yTarget;
+            Plow=0;
+            Phigh=0;
+            xTotal=1.0;
+            if(ver==11) printf("Initial P:%f \n",P);
+            option='l';
+            do{//secant approximation using k values from Wilson equation or liquid fugacity calculation
+                if (P>60e5) yTarget=0.66;
+                else if (P>40e5) yTarget=0.7;
+                else yTarget=0.85;//0.775
+                //yTarget=1.0;
                 yTotal=0;
-                option='l';
-                FF_MixPhiEOS(mix,T,&P,x,&option,substPhiL);//phi as liquid phase
+                FF_MixPhiEOS(mix,T,&P,x,&option,substPhiL);//phi as liquid phase, but it could be gas at this pressure
                 for (i=0;i<mix->numSubs;i++){
                     k[i]=substPhiL[i];
                     //k[i]=exp(log(mix->baseProp[i].Pc/ P)+5.373*(1+mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ *T));
-                    y[i]=x[i]/k[i];//Notation seems not OK, but we are obtaining liquid phase concentration
-                    xTotal=xTotal+y[i];
                     y[i]=x[i]*k[i];
+                    //if(y[i]>1) y[i]=1.0;
                     yTotal=yTotal+y[i];
                 }
-
-                if((xTotal<3.5*pow(yTotal,1.5))||(yTotal>yHigh)){
-                    P=P+Pmax/n;
-                    n=n*2;
+                if(yTotal>yTarget){
+                    Plow=P;
+                    sumHigh=yTotal-yTarget;
+                    Pnew=P*1.2;
                 }
-                else if((xTotal>yTotal*8)||(yTotal<yLow)){//probably we are too much over the bubble pressure
-                    P=P-Pmax/n;
-                    n=n*2;
+                else if(yTotal<yTarget){
+                    Phigh=P;
+                    sumLow=yTotal-yTarget;
+                    Pnew=P*0.8;
                 }
+                if (Phigh*Plow>0.0){
+                    Pnew=(Phigh*sumHigh-Plow*sumLow)/(sumHigh-sumLow);
+                    //Pnew=(Phigh+Plow)/2;
+                }
+                if (fabs(Pnew-P)<1.0) break;
+                P=Pnew;
                 counter++;
-                printf("Approach counter:%i n:%i xTotal:%f yTotal:%f New P:%f tpdg:%f\n",counter,n,xTotal,yTotal,P,tpdg);
-                if(counter>15) break;
-            } while((xTotal<3.5*pow(yTotal,1.5))||(xTotal>8*yTotal)||(yTotal<yLow)||(yTotal>yHigh));
+                if(ver==1) printf("Approach counter:%i xTotal:%f yTotal:%f New P:%f k[0]:%f k[1]:%f)\n",counter,xTotal,yTotal,P,k[0],k[1]);
+                if(counter>25) break;
+            } while(fabs(yTotal-yTarget)>0.00001);
+            //y[i] is not necessarily normalized
         }
-    }
-    else{   //If we got a guess from the user
-        P=*bPguess;
-        option='l';
-        FF_MixPhiEOS(mix,T,&P,x,&option,substPhiL);//Speed up for cubics
-        yTotal=0;
+
+        else{   //If we got a bubble P guess from the user,
+            option='l';
+            FF_MixPhiEOS(mix,T,&P,x,&option,substPhiL);//Speed up for cubics
+            yTotal=0;
+            for (i=0;i<mix->numSubs;i++){
+                y[i]=x[i]*substPhiL[i];
+                yTotal=yTotal+y[i];
+                //printf("k[%i]:%f\n",i,k[i]);
+            }
+            //y[i] is not normalized
+        }
+
         for (i=0;i<mix->numSubs;i++){
-            y[i]=x[i]*substPhiL[i];
-            yTotal=yTotal+y[i];
-            //printf("k[%i]:%f\n",i,k[i]);
+            y[i]=y[i]/yTotal; //we normalize y in order to obtain molar fractions
+            //printf("initial composition: i[%i] y:%f yTotal: %f\n",i,y[i],yTotal);
         }
     }
-    for (i=0;i<mix->numSubs;i++){
-        y[i]=y[i]/yTotal; //we normalize y in order to obtain molar fractions
-        //printf("initial composition: i[%i] y:%f yTotal: %f\n",i,y[i],yTotal);
-    }
 
+    if(ver==2) printf("Approximate bubble:%f xTotal:%f yTotal:%f approach counter:%i\n",P,xTotal,yTotal,counter);
 
+    //now the main loop
     do{
-        P = P *(1+yTotal)*0.5;
+        //P = P *(1+yTotal)*0.5;
+        P=P*(1+(yTotal-1)*0.5);
         if (mix->thModelActEos==0)FF_PhiFromActivity(mix,T,&P,x,actData,substPhiL);
         else{
             option='l';
@@ -863,13 +882,14 @@ void CALLCONV FF_BubbleP1(FF_MixData *mix,const double *T, const double x[],cons
         for (i=0;i<mix->numSubs;i++)
         {
             y[i]=x[i]*substPhiL[i]/substPhiG[i];
+            //if (y[i]>1) y[i]=1,0;
             yTotal=yTotal+y[i];
         }
         for (i=0;i<mix->numSubs;i++) y[i]=y[i]/yTotal; //we normalize y in order to obtain molar fractions
         dyTotal=1.0;
-        //printf("Counter:%i P:%f yTotal:%f\n",counter,P,yTotal);
+        if(ver==3) printf("Counter:%i P:%f yTotal:%f\n",counter,P,yTotal);
         //for(i=0;i<mix->numSubs;i++)printf("Subst[%i] phiL:%f y:%f phiG:%f\n",i,substPhiL[i],y[i],substPhiG[i]);
-        while ((dyTotal > 0.001)&&(fabs(yTotal - 1) > 0.0015)){
+        while ((dyTotal > 0.001)&&(fabs(yTotal - 1) > 0.00001)){
             FF_MixPhiEOS(mix,T,&P,y,&option,substPhiG);//phi as gas phase
             yTotal=0;
             for (i=0;i<mix->numSubs;i++)
@@ -877,7 +897,7 @@ void CALLCONV FF_BubbleP1(FF_MixData *mix,const double *T, const double x[],cons
                 newY[i]=x[i]*substPhiL[i]/substPhiG[i];
                 yTotal=yTotal+newY[i];
             }
-            //printf("Adj.gas: P:%f substPhiG:%f,%f yTotal:%f\n",P,substPhiG[0],substPhiG[1],yTotal);
+            if(ver==4) printf("Adj.gas: P:%f substPhiG:%f,%f yTotal:%f\n",P,substPhiG[0],substPhiG[1],yTotal);
             for (i=0;i<mix->numSubs;i++) newY[i]=newY[i]/yTotal; //we normalize y in order to obtain molar fractions
             dyTotal=0;
             for (i=0;i<mix->numSubs;i++)
@@ -890,7 +910,7 @@ void CALLCONV FF_BubbleP1(FF_MixData *mix,const double *T, const double x[],cons
         }
         //printf("counter:%i dyTotal:%f\n",counter,dyTotal);
     } while (fabs(yTotal - 1) > 0.0015);
-
+    if (ver==5) printf("BubbleP:%f counter:%i x[0]:%f y[0]:%f\n",P,counter,x[0],y[0]);
     //check that the phases are different
     double answerL[3],answerG[3],Vl,Vdiff,Ydiff=0;
     option='l';
@@ -901,14 +921,15 @@ void CALLCONV FF_BubbleP1(FF_MixData *mix,const double *T, const double x[],cons
     Vdiff=fabs(Vl-answerG[0])/Vl>0.02;
     for(i=0;i<mix->numSubs;i++) Ydiff=Ydiff+fabs(x[i]-y[i]);
     if((Vdiff>0.1)||((Vdiff>0.03)&&(Ydiff>0.02))){
-        //printf("BubbleP:%f n:%i\n",P,counter);
+        if (ver==6) printf("BubbleP:%f n:%i\n",P,counter);
         *bP=P;
     }
+    //*bP=P;
 }
 
 
 //Mixture dew pressure calculation, given T, composition, and thermo model to use
-void CALLCONV FF_DewP(FF_MixData *mix,const double *T, const double y[],const double *dPguess, double *dP,double x[],double substPhiL[],double substPhiG[]){
+void CALLCONV FF_DewPoriginal(FF_MixData *mix,const double *T, const double y[],const double *dPguess, double *dP,double x[],double substPhiL[],double substPhiG[]){
     FF_CubicParam param;
     FF_SubsActivityData actData[mix->numSubs];
     *dP=0;
@@ -1044,30 +1065,29 @@ void CALLCONV FF_DewP(FF_MixData *mix,const double *T, const double y[],const do
             }
             for (i=0;i<mix->numSubs;i++){
                 x[i]=x[i]/xTotal; //  normalization
-                printf("Pguess:%f x[%i];%f\n",P,i,x[i]);
+                //printf("Pguess:%f x[%i];%f\n",P,i,x[i]);
             }
-            printf("P guess:%f xTotal: %f\n",P,xTotal);
+            //printf("P guess:%f xTotal: %f\n",P,xTotal);
         }
         else{  //we are using gamma-phi
             double Vp[mix->numSubs];
-            int nPoints=1;
             P=0;
             for(i=0;i<mix->numSubs;i++){
-                if(mix->refVpEos==0) FF_PhysPropCorr(&mix->vpCorr[i].form,mix->vpCorr[i].coef,&mix->baseProp[i].MW,&nPoints,T,&Vp[i]);
+                if(mix->refVpEos==0) FF_PhysPropCorrM(mix->vpCorr[i].form,mix->vpCorr[i].coef,mix->baseProp[i].MW,*T,&Vp[i]);
                 else{
-                        if(mix->eosType==FF_SAFTtype) FF_VpEOS(&mix->eosType,T,&mix->saftData[i],&Vp[i]);
-                        else FF_VpEOS(&mix->eosType,T,&mix->cubicData[i],&Vp[i]);
+                        if(mix->eosType==FF_SAFTtype) FF_VpEos(mix->eosType,*T,&mix->saftData[i],&Vp[i]);
+                        else FF_VpEos(mix->eosType,*T,&mix->cubicData[i],&Vp[i]);
                     }
                 P=P+y[i]/Vp[i];//Inverse of P assuming Raoult law and gas fugacity coef=1
-                printf("Activity Vp[%i]:%f\n",i,Vp[i]);
+                //printf("Activity Vp[%i]:%f\n",i,Vp[i]);
             }
             P=1/P;  //This will be the initial P
             for(i=0;i<mix->numSubs;i++){
                 x[i]=y[i]*P/Vp[i];
-                printf("Activity x[%i]:%f\n",i,x[i]);
+                //printf("Activity x[%i]:%f\n",i,x[i]);
             }
             xTotal=1;
-            printf("Activity P:%f xTotal:%f\n",P,xTotal);
+            //printf("Activity P:%f xTotal:%f\n",P,xTotal);
         }
 
 
@@ -1088,8 +1108,8 @@ void CALLCONV FF_DewP(FF_MixData *mix,const double *T, const double y[],const do
             }
             for (i=0;i<mix->numSubs;i++) x[i]=x[i]/xTotal; //we normalize y in order to obtain molar fractions
             dxTotal=1.0;
-            printf("Counter:%i new P:%f new xTotal:%f\n",counter,P,xTotal);
-            for(i=0;i<mix->numSubs;i++)printf("Subst[%i] phiG:%f x:%f phiL:%f\n",i,substPhiG[i],x[i],substPhiL[i]);
+            //printf("Counter:%i new P:%f new xTotal:%f\n",counter,P,xTotal);
+            //for(i=0;i<mix->numSubs;i++)printf("Subst[%i] phiG:%f x:%f phiL:%f\n",i,substPhiG[i],x[i],substPhiL[i]);
             while ((dxTotal > 0.001)&&(fabs(xTotal - 1) > 0.001)){
                 if(mix->thModelActEos==0) FF_PhiAndActivity(mix,T,&P,x,actData,substPhiL);
                 else{
@@ -1115,7 +1135,7 @@ void CALLCONV FF_DewP(FF_MixData *mix,const double *T, const double y[],const do
                 if (counter>100) return;
             }
             //printf("counter:%i dxTotal:%f\n",counter,dxTotal);
-        } while (fabs(xTotal - 1) > 0.001);
+        } while (fabs(xTotal - 1) > 0.0002);
     }
 
 
@@ -1137,11 +1157,12 @@ void CALLCONV FF_DewP(FF_MixData *mix,const double *T, const double y[],const do
 
 
 //Mixture dew pressure calculation, given T, composition, and thermo model to use
-void CALLCONV FF_DewP1(FF_MixData *mix,const double *T, const double y[],const double *dPguess, double *dP,double x[],double substPhiL[],double substPhiG[]){
+void CALLCONV FF_DewP(FF_MixData *mix,const double *T, const double y[],const double *dPguess, double *dP,double x[],double substPhiL[],double substPhiG[]){
+    int ver=0;
     FF_SubsActivityData actData[mix->numSubs];
     *dP=0;
-    double Pmax=250e5;
-    double P;
+    double Pmax=400e5;
+    double P,yTotal=1.0;
     double k[mix->numSubs],newX[mix->numSubs],xTotal,dxTotal;
     int i=0,j,n=4,counter=0;
     char option,state;
@@ -1159,76 +1180,60 @@ void CALLCONV FF_DewP1(FF_MixData *mix,const double *T, const double y[],const d
 
     if (*dPguess==0) P=Pmax*0.5;
     else P=*dPguess;
-    xTotal=1.0;//just to enter in the loop of fast approximation using Wilson equation without any action
-    do{
-        if(xTotal<0.5){
-            P=P+Pmax/n;
-            n=n*2;
-        }
-        else if(xTotal>2){
-            P=P-Pmax/n;
-            n=n*2;
-        }
-        counter++;
+    //now approximation by secant method
+    //initialize P
+    P=0.0;
+    for (i=0;i<mix->numSubs;i++) P=P+y[i]*mix->baseProp[i].Pc;
+    P=P*0.5;
+    double Plow,Phigh,sumLow,sumHigh,Pnew;
+    double xTarget=1.0;
+    Plow=0;
+    Phigh=0;
+
+    do{//secant approximation using k values from Wilson equation and/or liquid fugacity calculation
         xTotal=0;
         for (i=0;i<mix->numSubs;i++){
             k[i]=exp(log(mix->baseProp[i].Pc/ P)+5.373*(1+mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ *T));
             x[i]=y[i]/k[i];
             xTotal=xTotal+x[i];
-            //printf("k[%i]:%f\n",i,k[i]);
         }
-        //printf("Wilson apr.counter:%i n:%i P:%f xTotal:%f\n",counter,n,P,xTotal);
-        if(counter>20) return;
-    } while((xTotal<0.5)||(xTotal>2));
-
-    //Approximation by finding a pressure with liquid and gas phases using the gas phase eos
-    double answerL[3],answerG[3];
-    option='b';
-    FF_MixVfromTPeos(mix,T,&P,y,&option,answerL,answerG,&state);
-    while ((state!='b')&&(counter<25)){
-        if (state=='f'){
-            *dP=0;
-            return;
+        if(xTotal>xTarget){
+            Phigh=P;
+            sumHigh=xTotal-xTarget;
+            Pnew=P*0.8;
         }
-        else if ((state=='l')&&(answerL[2]<=0.3)) P=P-Pmax/n;
-        else if((state=='g')&&(answerG[2]>=0.2)) P=P+Pmax/n;
-        else if ((state=='u')&&(answerL[2]<=0.25)) P=P-Pmax/n;
-        else if((state=='u')&&(answerL[2]>=0.3)) P=P+Pmax/n;
-        else{
-            double interval=Pmax/(4*n);
-            //printf("entering approx. interval: %f coming from P: %f\n",interval,P);
-            P=P-8*interval;
-            for(j=0;j<16;j++){
-                P=P+interval;
-                FF_MixVfromTPeos(mix,T,&P,y,&option,answerL,answerG,&state);
-                //printf("Interval:%i P:%f state:%c  Vl:%f  Zl:%f  Vg%f  Zg%f\n",j,P,state,answerL[0],answerL[2],answerG[0],answerG[2]);
-                if ((state=='b')&&(fabs(answerL[2]-answerG[2])>0.01)) break;
-                if (state=='f'){
-                    *dP=0;
-                    return;
-                }
-            }
-            if ((state=='b')&&(fabs(answerL[2]-answerG[2])>0.01)) break;
-            *dP=0;
-            return;
+        else if(xTotal<xTarget){
+            Plow=P;
+            sumLow=xTotal-xTarget;
+            Pnew=P*1.2;
         }
-        FF_MixVfromTPeos(mix,T,&P,y,&option,answerL,answerG,&state);
-        n=n*2;
+        if (Phigh*Plow>0.0){
+            Pnew=(Plow*sumHigh-Phigh*sumLow)/(sumHigh-sumLow);
+        }
+        if (fabs(Pnew-P)<1.0) break;
+        P=Pnew;
         counter++;
-        //printf("V aprox.counter:%i n:%i P:%f state:%c  Vl:%f  Zl:%f  Vg%f  Zg%f\n",counter,n/2,P,state,answerL[0],answerL[2],answerG[0],answerG[2]);
+        if(ver==1) printf("Approach counter:%i xTotal:%f yTotal:%f New P:%f k[0]:%f k[1]:%f)\n",counter,xTotal,yTotal,P,k[0],k[1]);
+        if(counter>15) break;
+    } while(fabs(xTotal-xTarget)>0.00001);
+
+    for (i=0;i<mix->numSubs;i++){
+        x[i]=x[i]/xTotal; //we normalize x in order to obtain molar fractions.
+        //printf("initial composition: i[%i] x:%f xTotal: %f\n",i,x[i],xTotal);
     }
 
-
     //Now we have an initial P and can begin the calculation of the liquid and gas fugacity coefficients
+    double answerL[3],answerG[3];
     if (mix->thModelActEos==0){
-        FF_PhiAndActivity(mix,T,&P,y,actData,substPhiL);
+        FF_PhiAndActivity(mix,T,&P,x,actData,substPhiL);
         option='g';
         FF_MixPhiEOS(mix,T,&P,y,&option,substPhiG);
         //for(i=0;i<mix->numSubs;i++)printf("Initial. Subst[%i] x and y:%f phiL:%f phiG:%f\n",i,y[i],substPhiL[i],substPhiG[i]);
     }
     else {
         option='l';
-        FF_MixPhiEOS(mix,T,&P,y,&option,substPhiL);
+        //FF_MixPhiEOS(mix,T,&P,y,&option,substPhiL);
+        FF_MixPhiEOS(mix,T,&P,x,&option,substPhiL);
         option='g';
         FF_MixPhiEOS(mix,T,&P,y,&option,substPhiG);//phi as gas phase
         //for(i=0;i<mix->numSubs;i++)printf("Initial. Subst[%i] x and y:%f phiL:%f phiG:%f\n",i,y[i],substPhiL[i],substPhiG[i]);
@@ -1241,7 +1246,7 @@ void CALLCONV FF_DewP1(FF_MixData *mix,const double *T, const double y[],const d
     }
     for (i=0;i<mix->numSubs;i++){
         x[i]=x[i]/xTotal; //we normalize y in order to obtain molar fractions
-        //printf("Enter in the loop with P:%f x[%i]: %f xTotal: %f\n",P,i,x[i],xTotal);
+        if(ver==1) printf("Enter in the loop with P:%f x[%i]: %f xTotal: %f\n",P,i,x[i],xTotal);
     }
     do{
         P =P /xTotal;
@@ -1306,6 +1311,7 @@ void CALLCONV FF_DewP1(FF_MixData *mix,const double *T, const double y[],const d
 }
 
 
+
 //Pressure envelope of a binary mixture
 void CALLCONV FF_PressureEnvelope(FF_MixData *mix,const double *T, const int *nPoints, double c[],double bP[],double y[],double dP[],double x[]){
     if(mix->numSubs!=2) return;
@@ -1320,8 +1326,8 @@ void CALLCONV FF_PressureEnvelope(FF_MixData *mix,const double *T, const int *nP
     for(i=0;i<*nPoints;i++){
         c[i]=i*interval;
     }
-    if(mix->eosType==FF_SAFTtype)FF_VpEOS(&mix->eosType,T,&mix->saftData[0],&Vp);
-    else FF_VpEOS(&mix->eosType,T,&mix->cubicData[0],&Vp);
+    if(mix->eosType==FF_SAFTtype)FF_VpEos(mix->eosType,*T,&mix->saftData[0],&Vp);
+    else FF_VpEos(mix->eosType,*T,&mix->cubicData[0],&Vp);
     bP[*nPoints - 1]=dP[*nPoints - 1]=Vp;
     x[*nPoints - 1]=y[*nPoints - 1]=1;
     //printf("bP:%f\n",bP[*numPoints - 1]);
@@ -1334,21 +1340,21 @@ void CALLCONV FF_PressureEnvelope(FF_MixData *mix,const double *T, const int *nP
         x[i]=out[0];
         //printf("c:%f bP:%f y:%f dP:%f x:%f\n",in[0],bP[i],y[i],dP[i],x[i]);
     }
-    if(mix->eosType==FF_SAFTtype)FF_VpEOS(&mix->eosType,T,&mix->saftData[1],&Vp);
-    else FF_VpEOS(&mix->eosType,T,&mix->cubicData[1],&Vp);
+    if(mix->eosType==FF_SAFTtype)FF_VpEos(mix->eosType,*T,&mix->saftData[1],&Vp);
+    else FF_VpEos(mix->eosType,*T,&mix->cubicData[1],&Vp);
     bP[0]=dP[0]=Vp;
     y[0]=x[0]=0;
 }
 
 
 //Mixture bubble temperature calculation, given P, composition, and thermo model to use
-void CALLCONV FF_BubbleT(FF_MixData *mix,const double *P, const double x[],const double *bTguess, double *bT,double y[],double substPhiL[],double substPhiG[]){
+void CALLCONV FF_BubbleTtpdg(FF_MixData *mix,const double *P, const double x[],const double *bTguess, double *bT,double y[],double substPhiL[],double substPhiG[]){
     FF_CubicParam param;
     FF_SubsActivityData actData[mix->numSubs];
     *bT=0;
     double Tmax=800;//This is the maximum computable absolute temperature
     double T;//to use in the computations
-    double k[mix->numSubs],newY[mix->numSubs],yTotal,dyTotal;
+    double k[mix->numSubs],newY[mix->numSubs],yTotal=0,dyTotal;
     int i=0,j,n=4,counter=0;
     char option,state;
     //If the liquid model is based on activity and Vp all components must be below the critical pressure
@@ -1364,8 +1370,8 @@ void CALLCONV FF_BubbleT(FF_MixData *mix,const double *P, const double x[],const
     if((mix->thModelActEos==1)&&(*bTguess==0)){  //If phi-phi without guess
         double yLow,yHigh,tpdg,tpdMin,tpdMax;
         T=Tmax*0.5;
-        yLow=0.65;
-        yHigh=1.0;
+        yLow=0.65;//0.65;
+        yHigh=0.999;
         tpdMin=0.0005;
         tpdMax=0.002;
         do{//bisection approximation using k values from liquid fugacity calculation. To study to change to regula falsi
@@ -1425,18 +1431,18 @@ void CALLCONV FF_BubbleT(FF_MixData *mix,const double *P, const double x[],const
             }
             for (i=0;i<mix->numSubs;i++){
                 y[i]=y[i]/yTotal; //  normalization
-                printf("Pguess:%f y[%i];%f\n",P,i,y[i]);
+                //printf("Pguess:%f y[%i];%f\n",P,i,y[i]);
             }
         }
         else{  //gamma-phi model
             double Tb[mix->numSubs];
             T=0;
             for(i=0;i<mix->numSubs;i++){
-                if(mix->eosType==FF_SAFTtype) FF_TbEOS(&mix->eosType,P,&mix->saftData[i],&Tb[i]);
-                else FF_TbEOS(&mix->eosType,P,&mix->cubicData[i],&Tb[i]);
+                if(mix->eosType==FF_SAFTtype) FF_TbEos(mix->eosType,*P,&mix->saftData[i],&Tb[i]);
+                else FF_TbEos(mix->eosType,*P,&mix->cubicData[i],&Tb[i]);
                 T=T+x[i]*Tb[i];
             }
-            printf("Gamma-Phi T initial:%f\n",T);
+            //printf("Gamma-Phi T initial:%f\n",T);
             yTotal=0;
             for (i=0;i<mix->numSubs;i++){
                 y[i]=x[i]*exp(log(mix->baseProp[i].Pc/ *P)+5.373*(1+mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ T));
@@ -1446,7 +1452,7 @@ void CALLCONV FF_BubbleT(FF_MixData *mix,const double *P, const double x[],const
             }
             for (i=0;i<mix->numSubs;i++){
                 y[i]=y[i]/yTotal; //  normalization
-                printf("T init:%f y[%i];%f\n",T,i,y[i]);
+                //printf("T init:%f y[%i];%f\n",T,i,y[i]);
             }
 
         }
@@ -1454,7 +1460,7 @@ void CALLCONV FF_BubbleT(FF_MixData *mix,const double *P, const double x[],const
 
     //final loop to obtain bubble T
     do{
-        T=T/pow(yTotal,0.06);
+        T=T/pow(yTotal,0.08);//0.06
         if (mix->thModelActEos==0){
             FF_PhiAndActivity(mix,&T,P,x,actData,substPhiL);
         }
@@ -1510,11 +1516,12 @@ void CALLCONV FF_BubbleT(FF_MixData *mix,const double *P, const double x[],const
     if((Vdiff>0.1)||((Vdiff>0.03)&&(Ydiff>0.02))||((Vdiff>0.015)&&(Ydiff>0.08))||((Vdiff>0.005)&&(Ydiff>0.16))){
         *bT=T;
     }
+    *bT=T;
 }
 
 
 //Mixture bubble temperature calculation, given P, composition, and thermo model to use
-void CALLCONV FF_BubbleT1(FF_MixData *mix,const double *P, const double x[],const double *bTguess, double *bT,double y[],double substPhiL[],double substPhiG[]){
+void CALLCONV FF_BubbleT1bona(FF_MixData *mix,const double *P, const double x[],const double *bTguess, double *bT,double y[],double substPhiL[],double substPhiG[]){
     FF_CubicParam param;
     FF_SubsActivityData actData[mix->numSubs];
     *bT=0;
@@ -1531,7 +1538,6 @@ void CALLCONV FF_BubbleT1(FF_MixData *mix,const double *P, const double x[],cons
         if((mix->thModelActEos==0)&&(mix->refVpEos==0)){//If activity and Vp are used for the liquid it is easier
             double Thigh=0,Tlow=0;
             double Vp,Pcalc=0,Phigh=0,Plow=0;;
-            int nPoints=1;
             T=1000;
             for(i=0;i<mix->numSubs;i++){
                 if(mix->baseProp[i].Tc<T) T=mix->baseProp[i].Tc;//We get the minimum Tc. Over this the method is not applicable
@@ -1557,7 +1563,7 @@ void CALLCONV FF_BubbleT1(FF_MixData *mix,const double *P, const double x[],cons
             }
             //and now vapor pressure and pressure
              for(i=0;i<mix->numSubs;i++){
-                FF_PhysPropCorr(&mix->vpCorr[i].form,mix->vpCorr[i].coef,&mix->baseProp[i].MW,&nPoints,&T,&Vp);
+                FF_PhysPropCorrM(mix->vpCorr[i].form,mix->vpCorr[i].coef,mix->baseProp[i].MW,T,&Vp);
                 //printf("Vp[%i]: form:%i %f\n",i,mix->vpCorr[i].form,Vp);
                 Pcalc=Pcalc+x[i]*actData[i].gamma*Vp;//This is the pressure at the maximum achivable temperature
             }
@@ -1593,7 +1599,7 @@ void CALLCONV FF_BubbleT1(FF_MixData *mix,const double *P, const double x[],cons
                 }
                 //and now vapor pressure and pressure
                  for(i=0;i<mix->numSubs;i++){
-                    FF_PhysPropCorr(&mix->vpCorr[i].form,mix->vpCorr[i].coef,&mix->baseProp[i].MW,&nPoints,&T,&Vp);
+                    FF_PhysPropCorrM(mix->vpCorr[i].form,mix->vpCorr[i].coef,mix->baseProp[i].MW,T,&Vp);
                     //printf("Vp[%i]: form:%i %f\n",i,mix->vpCorr[i].form,Vp);
                     Pcalc=Pcalc+x[i]*actData[i].gamma*Vp;//This is the pressure at the maximum achivable temperature
                 }
@@ -1637,7 +1643,7 @@ void CALLCONV FF_BubbleT1(FF_MixData *mix,const double *P, const double x[],cons
                 }
 
                 counter++;
-                printf("Approach counter:%i n:%i xTotal:%f yTotal:%f New T:%f tpdg:%f\n",counter,n,xTotal,yTotal,T,tpdg);
+                //printf("Approach counter:%i n:%i xTotal:%f yTotal:%f New T:%f tpdg:%f\n",counter,n,xTotal,yTotal,T,tpdg);
                 if(counter>15) break;
             } while((xTotal<1.8)||(xTotal>90)||(yTotal<yLow)||(yTotal>yHigh));
         }
@@ -1662,7 +1668,7 @@ void CALLCONV FF_BubbleT1(FF_MixData *mix,const double *P, const double x[],cons
 
     //final loop to obtain bubble T
     do{
-        T=T/pow(yTotal,0.06);
+        T=T/pow(yTotal,0.06);//0.06 original
         if (mix->thModelActEos==0){
             switch(mix->actModel){
             case FF_UNIFACStd:
@@ -1736,8 +1742,168 @@ void CALLCONV FF_BubbleT1(FF_MixData *mix,const double *P, const double x[],cons
 }
 
 
+//Mixture bubble temperature calculation, given P, composition, and thermo model to use
+void CALLCONV FF_BubbleT(FF_MixData *mix,const double *P, const double x[],const double *bTguess, double *bT,double y[],double substPhiL[],double substPhiG[]){
+    FF_CubicParam param;
+    FF_SubsActivityData actData[mix->numSubs];
+    *bT=0;
+    double Tl=0,Th=0,Tnew,yLow,yHigh;
+    double T;//to use in the computations
+    double k[mix->numSubs],newY[mix->numSubs],yTotal,dyTotal;
+    int i=0,j,n=4,counter=0;
+    char option,state;
+
+    if(mix->thModelActEos==0){//gamma-phi model previous considerations
+        if(mix->mixRule==FF_VdW) mix->mixRule=FF_VdWnoInt;//As BIP are for activity not use them in the gas phase eos
+        //If the liquid model is based on activity and Vp all components must be below the critical pressure
+        if(mix->refVpEos==0){
+            for(i=0;i<mix->numSubs;i++){
+                if(*P>mix->baseProp[i].Pc) return;
+            }
+        }
+    }
+
+    if(*bTguess==0){  // without guess
+        double yTarget=1.0;  //0.68;
+        T=0;
+        for (i=0;i<mix->numSubs;i++) T=T+x[i]*mix->baseProp[i].Tc;
+        T=0.7*T;
+        option='l';
+        if (*P>35e5) yTarget=0.73;
+        else if (*P>20e5) yTarget=0.71;
+        else yTarget=0.69;
+        do{
+            if (mix->thModelActEos==1){//phi-phi
+                FF_MixPhiEOS(mix,&T,P,x,&option,substPhiL);//phi as liquid phase, but it could be gas at this pressure
+            }
+
+            yTotal=0;
+            for (i=0;i<mix->numSubs;i++){  //Initial k and concentrations calculation
+                if (mix->thModelActEos==1) k[i]=substPhiL[i];//phi-phi
+                else k[i]=(pow(mix->baseProp[i].Pc,((1/T-1/mix->baseProp[i].Tb)/(1/mix->baseProp[i].Tc-1/mix->baseProp[i].Tb)))/ *P);//gamma-phi. An alternative is to use gamma
+                y[i]=x[i]*k[i];
+                yTotal=yTotal+y[i];
+            }
+            if (yTotal<yTarget){
+                Tl=T;
+                yLow=yTotal-yTarget;
+                Tnew=T*1.05;
+            }
+            else if(yTotal>yTarget){
+                Th=T;
+                yHigh=yTotal-yTarget;
+                Tnew=T/1.05;
+            }
+            else break;
+            if (Tl*Th>0) Tnew=(yHigh*Tl-yLow*Th)/(yHigh-yLow);//when we have already calculated Tl and Th
+            if ((fabs(T-Tnew)<0.001)||(fabs(yTotal-yTarget)<0.00001)) break;
+            else T=Tnew;
+            counter++;
+        } while(counter<20);
+        //printf("counter:%i Initial T:%f yTotal:%f\n",counter,T,yTotal);
+    }
+    else{   //If we got a guess from the user
+        T=*bTguess;
+        if (mix->thModelActEos==1){//phi-phi
+            FF_MixPhiEOS(mix,&T,P,x,&option,substPhiL);//phi as liquid phase, but it could be gas at this pressure
+        }
+        yTotal=0;
+        for (i=0;i<mix->numSubs;i++){
+            if (mix->thModelActEos==1) k[i]=substPhiL[i];//phi-phi
+            else k[i]=pow(mix->baseProp[i].Pc,((1/T-1/mix->baseProp[i].Tb)/(1/mix->baseProp[i].Tc-1/mix->baseProp[i].Tb)))/ *P;//gamma-phi.
+            //An alternative is to use a calculated gamma
+            y[i]=x[i]*k[i];
+            yTotal=yTotal+y[i];
+            //printf("k[%i]:%f\n",i,k[i]);
+        }
+    }
+
+    //Now the final search
+    for (i=0;i<mix->numSubs;i++){
+        y[i]=y[i]/yTotal; //  normalization
+        //printf("T init:%f y[%i];%f\n",T,i,y[i]);
+    }
+    Tl=0;
+    Th=0;
+    do{
+        //printf("P:%f\n",P);
+        //FF_MixPhiEOS(mix,&TbEst,P,x,&option,substPhiL);//phi as liquid phase, but it could be gas at this pressure
+        if (mix->thModelActEos==0){
+            FF_PhiAndActivity(mix,&T,P,x,actData,substPhiL);
+        }
+        else{
+            option='l';
+            FF_MixPhiEOS(mix,&T,P,x,&option,substPhiL);//phi as liquid phase
+        }
+        option='g';
+        FF_MixPhiEOS(mix,&T,P,y,&option,substPhiG);//phi as gas phase
+        yTotal=0;
+        for (i=0;i<mix->numSubs;i++)
+        {
+            y[i]=x[i]*substPhiL[i]/substPhiG[i];
+            yTotal=yTotal+y[i];
+        }
+        for (i=0;i<mix->numSubs;i++) y[i]=y[i]/yTotal; //we normalize y in order to obtain molar fractions
+        counter++;
+        dyTotal=1.0;
+        //printf("Counter:%i T:%f yTotal:%f x[0]:%f y[0]:%f\n",counter,T,yTotal,x[0],y[0]);
+        //for(i=0;i<mix->numSubs;i++)printf("Subst[%i] phiL:%f y:%f phiG:%f\n",i,substPhiL[i],y[i],substPhiG[i]);
+        while ((dyTotal > 0.001)&&(fabs(yTotal - 1) > 0.00001)){
+            FF_MixPhiEOS(mix,&T,P,y,&option,substPhiG);//phi as gas phase
+            yTotal=0;
+            for (i=0;i<mix->numSubs;i++)
+            {
+                newY[i]=x[i]*substPhiL[i]/substPhiG[i];
+                yTotal=yTotal+newY[i];
+            }
+            //printf("Adj.gas: T:%f substPhiG:%f,%f yTotal:%f\n",T,substPhiG[0],substPhiG[1],yTotal);
+            for (i=0;i<mix->numSubs;i++) newY[i]=newY[i]/yTotal; //we normalize y in order to obtain molar fractions
+            dyTotal=0;
+            for (i=0;i<mix->numSubs;i++)
+            {
+                dyTotal=dyTotal+fabs(newY[i]-y[i]);
+                y[i]=newY[i];
+            }
+            counter++;
+            if (counter>100) return;
+        }
+
+        if (yTotal<1){
+            Tl=T;
+            yLow=yTotal-1;
+            Tnew=T*1.01;
+        }
+        else if(yTotal>1){
+            Th=T;
+            yHigh=yTotal-1;
+            Tnew=T/1.01;
+        }
+        else break;
+        if (Tl*Th>0) Tnew=(yHigh*Tl-yLow*Th)/(yHigh-yLow);//when we have already calculated Tl and Th
+        if ((fabs(T-Tnew)<0.001)||(fabs(yTotal-1)<0.00001)) break;
+        else T=Tnew;
+        counter++;
+        //printf("Adjusting T Counter:%i n:%i yTotal:%f New T:%f\n",counter,n,yTotal,T);
+    } while(counter<100);
+
+    //check that the phases are different
+    double answerL[3],answerG[3],Vl,Vdiff,Ydiff=0;
+    option='l';
+    FF_MixVfromTPeos(mix,&T,P,x,&option,answerL,answerG,&state);
+    Vl=answerL[0];
+    option='g';
+    FF_MixVfromTPeos(mix,&T,P,y,&option,answerL,answerG,&state);
+    Vdiff=fabs(Vl-answerG[0])/Vl;
+    //printf("T:%f Vl:%f Vdiff:%f Ydiff:%f\n",T,Vl,Vdiff,Ydiff);
+    for(i=0;i<mix->numSubs;i++) Ydiff=Ydiff+fabs(x[i]-y[i]);
+    if((Vdiff>0.05)||((Vdiff>0.03)&&(Ydiff>0.02))||((Vdiff>0.015)&&(Ydiff>0.08))||((Vdiff>0.005)&&(Ydiff>0.16))){
+        *bT=T;
+    }
+}
+
+
 //Mixture dew temperature calculation, given P, composition, and thermo model to use
-void CALLCONV FF_DewT(FF_MixData *mix,const double *P, const double y[],const double *dTguess, double *dT,double x[],double substPhiL[],double substPhiG[]){
+void CALLCONV FF_DewTOriginal(FF_MixData *mix,const double *P, const double y[],const double *dTguess, double *dT,double x[],double substPhiL[],double substPhiG[]){
     FF_CubicParam param;
     FF_SubsActivityData actData[mix->numSubs];
     *dT=0;
@@ -1772,7 +1938,7 @@ void CALLCONV FF_DewT(FF_MixData *mix,const double *P, const double y[],const do
         yPhase='g';  //We begin saying that we are in gas phase. We need to know when we change to have a liquid root
         xPhase='g';
         xTotal=0;
-        printf("Initial V:%f\n",VyPrev);
+        //printf("Initial V:%f\n",VyPrev);
         do{  //bisection approximation using k values from liquid fugacity calculation
             option='b';  //We ask for the calculations being made from liquid and gas sides (of course not necessary for cubics)
             FF_MixVfromTPeos(mix,&T,P,y,&option,answerL,answerG,&state);
@@ -1878,198 +2044,34 @@ void CALLCONV FF_DewT(FF_MixData *mix,const double *P, const double y[],const do
             }
             for (i=0;i<mix->numSubs;i++){
                 x[i]=x[i]/xTotal; //  normalization
-                printf("Pguess:%f x[%i];%f\n",P,i,x[i]);
+                //printf("Pguess:%f x[%i];%f\n",P,i,x[i]);
             }
-            printf("P guess:%f xTotal: %f\n",P,xTotal);
+            //printf("P guess:%f xTotal: %f\n",P,xTotal);
         }
         else{  //we are using gamma-phi
             double Vp[mix->numSubs];
-            int nPoints=1;
             P=0;
             for(i=0;i<mix->numSubs;i++){
-                if(mix->refVpEos==0) FF_PhysPropCorr(&mix->vpCorr[i].form,mix->vpCorr[i].coef,&mix->baseProp[i].MW,&nPoints,&T,&Vp[i]);
+                if(mix->refVpEos==0) FF_PhysPropCorrM(mix->vpCorr[i].form,mix->vpCorr[i].coef,mix->baseProp[i].MW,T,&Vp[i]);
                 else{
-                        if(mix->eosType==FF_SAFTtype) FF_VpEOS(&mix->eosType,&T,&mix->saftData[i],&Vp[i]);
-                        else FF_VpEOS(&mix->eosType,&T,&mix->cubicData[i],&Vp[i]);
+                        if(mix->eosType==FF_SAFTtype) FF_VpEos(mix->eosType,T,&mix->saftData[i],&Vp[i]);
+                        else FF_VpEos(mix->eosType,T,&mix->cubicData[i],&Vp[i]);
                     }
                 T=T+y[i]/Vp[i];//Inverse of P assuming Raoult law and gas fugacity coef=1
-                printf("Activity Vp[%i]:%f\n",i,Vp[i]);
+                //printf("Activity Vp[%i]:%f\n",i,Vp[i]);
             }
             T=1/T;  //This will be the initial P
             for(i=0;i<mix->numSubs;i++){
                 x[i]=y[i]*T/Vp[i];
-                printf("Activity x[%i]:%f\n",i,x[i]);
+                //printf("Activity x[%i]:%f\n",i,x[i]);
             }
             xTotal=1;
-            printf("Activity P:%f xTotal:%f\n",P,xTotal);
+            //printf("Activity P:%f xTotal:%f\n",P,xTotal);
         }
-
-
-        do{
-            T=T*pow(xTotal,0.06);
-            if (mix->thModelActEos==0)FF_PhiAndActivity(mix,&T,P,x,actData,substPhiL);
-            else{
-                option='l';
-                FF_MixPhiEOS(mix,&T,P,x,&option,substPhiL);//phi as liquid phase
-            }
-            option='g';
-            FF_MixPhiEOS(mix,&T,P,y,&option,substPhiG);//phi as gas phase
-            xTotal=0;
-            for (i=0;i<mix->numSubs;i++)
-            {
-                x[i]=y[i]*substPhiG[i]/substPhiL[i];
-                xTotal=xTotal+x[i];
-            }
-            for (i=0;i<mix->numSubs;i++) x[i]=x[i]/xTotal; //we normalize y in order to obtain molar fractions
-            dxTotal=1.0;
-            printf("Counter:%i new P:%f new xTotal:%f\n",counter,P,xTotal);
-            for(i=0;i<mix->numSubs;i++)printf("Subst[%i] phiG:%f x:%f phiL:%f\n",i,substPhiG[i],x[i],substPhiL[i]);
-            while ((dxTotal > 0.001)&&(fabs(xTotal - 1) > 0.001)){
-                if(mix->thModelActEos==0) FF_PhiAndActivity(mix,&T,P,x,actData,substPhiL);
-                else{
-                    option='l';
-                    FF_MixPhiEOS(mix,&T,P,x,&option,substPhiL);
-                }
-
-                xTotal=0;
-                for (i=0;i<mix->numSubs;i++)
-                {
-                    newX[i]=y[i]*substPhiG[i]/substPhiL[i];
-                    xTotal=xTotal+newX[i];
-                }
-                for (i=0;i<mix->numSubs;i++) newX[i]=newX[i]/xTotal; //we normalize y in order to obtain molar fractions
-                dxTotal=0;
-                for (i=0;i<mix->numSubs;i++)
-                {
-                    dxTotal=dxTotal+fabs(newX[i]-x[i]);
-                    x[i]=newX[i];
-                }
-                //printf("Adj.liquid: P:%f substPhiL:%f,%f xTotal:%f dxTotal:%f\n",P,substPhiL[0],substPhiL[1],xTotal,dxTotal);
-                counter=counter+1;
-                if (counter>100) return;
-            }
-            //printf("counter:%i dxTotal:%f\n",counter,dxTotal);
-        } while (fabs(xTotal - 1) > 0.001);
-    }
-
-
-    //check that the phases are different
-    double answerL[3],answerG[3],Vl,Vdiff,Ydiff=0;
-    option='l';
-    FF_MixVfromTPeos(mix,&T,P,x,&option,answerL,answerG,&state);
-    Vl=answerL[0];
-    option='g';
-    FF_MixVfromTPeos(mix,&T,P,y,&option,answerL,answerG,&state);
-    Vdiff=fabs(Vl-answerG[0])/Vl;
-    for(i=0;i<mix->numSubs;i++) Ydiff=Ydiff+fabs(x[i]-y[i]);
-    //printf("P:%f Vl:%f Vdiff:%f Ydiff:%f\n",P,Vl,Vdiff,Ydiff);
-    if((Vdiff>0.1)||((Vdiff>0.03)&&(Ydiff>0.02))||((Vdiff>0.015)&&(Ydiff>0.08))||((Vdiff>0.005)&&(Ydiff>0.16))){
-        //printf("DewP:%f\n",P);
-        *dT=T;
-    }
-}
-
-
-//Mixture dew temperature calculation, given P, composition, and thermo model to use
-void CALLCONV FF_DewT1(FF_MixData *mix,const double *P, const double y[],const double *dTguess, double *dT,double x[],double substPhiL[],double substPhiG[]){
-    FF_SubsActivityData actData[mix->numSubs];
-    *dT=0;
-    double Tmax=800;
-    double T;
-    double k[mix->numSubs],newX[mix->numSubs],xTotal,dxTotal;
-    int i=0,j,n=4,counter=0;
-    char option,state;
-
-    if(mix->thModelActEos==0){
-        if(mix->mixRule==FF_VdW) mix->mixRule=FF_VdWnoInt;//As BIP are for activity not use them in the gas pahse eos
-    }
-
-    if (*dTguess==0) T=Tmax*0.5;
-    else T=*dTguess;
-    xTotal=1.0;//just to enter in the loop of fast approximation using Wilson equation without any action
-    do{
-        if(xTotal<0.5){
-            T=T-Tmax/n;
-            n=n*2;
-        }
-        else if(xTotal>2){
-            T=T+Tmax/n;
-            n=n*2;
-        }
-        counter++;
-        xTotal=0;
-        for (i=0;i<mix->numSubs;i++){
-            k[i]=exp(log(mix->baseProp[i].Pc/ *P)+5.373*(1+mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ T));
-            x[i]=y[i]/k[i];
-            xTotal=xTotal+x[i];
-            //printf("k[%i]:%f\n",i,k[i]);
-        }
-        //printf("Wilson apr.counter:%i n:%i P:%f xTotal:%f\n",counter,n,P,xTotal);
-        if(counter>20) return;
-    } while((xTotal<0.5)||(xTotal>2));
-
-    //Approximation by finding a pressure with liquid and gas phases using the gas phase eos
-    double answerL[3],answerG[3];
-    option='b';
-    FF_MixVfromTPeos(mix,&T,P,y,&option,answerL,answerG,&state);
-    while ((state!='b')&&(counter<25)){
-        if (state=='f'){
-            return;
-        }
-        else if ((state=='l')&&(answerL[2]<=0.3)) T=T+Tmax/n;
-        else if((state=='g')&&(answerG[2]>=0.2)) T=T-Tmax/n;
-        else if ((state=='u')&&(answerL[2]<=0.25)) T=T+Tmax/n;
-        else if((state=='u')&&(answerL[2]>=0.3)) T=T-Tmax/n;
-        else{
-            double interval=Tmax/(4*n);
-            //printf("entering approx. interval: %f coming from P: %f\n",interval,P);
-            T=T-8*interval;
-            for(j=0;j<16;j++){
-                T=T+interval;
-                FF_MixVfromTPeos(mix,&T,P,y,&option,answerL,answerG,&state);
-                //printf("Interval:%i P:%f state:%c  Vl:%f  Zl:%f  Vg%f  Zg%f\n",j,P,state,answerL[0],answerL[2],answerG[0],answerG[2]);
-                if ((state=='b')&&(fabs(answerL[2]-answerG[2])>0.01)) break;
-                if (state=='f'){
-                    return;
-                }
-            }
-            if ((state=='b')&&(fabs(answerL[2]-answerG[2])>0.01)) break;
-            return;
-        }
-        FF_MixVfromTPeos(mix,&T,P,y,&option,answerL,answerG,&state);
-        n=n*2;
-        counter++;
-        //printf("V aprox.counter:%i n:%i P:%f state:%c  Vl:%f  Zl:%f  Vg%f  Zg%f\n",counter,n/2,P,state,answerL[0],answerL[2],answerG[0],answerG[2]);
-    }
-
-
-    //Now we have an initial T and can begin the calculation of the liquid and gas fugacity coefficients
-    if (mix->thModelActEos==0){
-        FF_PhiAndActivity(mix,&T,P,y,actData,substPhiL);
-        option='g';
-        FF_MixPhiEOS(mix,&T,P,y,&option,substPhiG);
-        //for(i=0;i<mix->numSubs;i++)printf("Initial. Subst[%i] x and y:%f phiL:%f phiG:%f\n",i,y[i],substPhiL[i],substPhiG[i]);
-    }
-    else {
-        option='l';
-        FF_MixPhiEOS(mix,&T,P,y,&option,substPhiL);
-        option='g';
-        FF_MixPhiEOS(mix,&T,P,y,&option,substPhiG);//phi as gas phase
-        //for(i=0;i<mix->numSubs;i++)printf("Initial. Subst[%i] x and y:%f phiL:%f phiG:%f\n",i,y[i],substPhiL[i],substPhiG[i]);
-    }
-
-    xTotal=0;
-    for (i=0;i<mix->numSubs;i++){
-        x[i]=y[i]*substPhiG[i]/substPhiL[i];//Initial composition of liquid phase
-        xTotal=xTotal+x[i];
-    }
-    for (i=0;i<mix->numSubs;i++){
-        x[i]=x[i]/xTotal; //we normalize y in order to obtain molar fractions
-        //printf("Enter in the loop with P:%f x[%i]: %f xTotal: %f\n",P,i,x[i],xTotal);
     }
     do{
         T=T*pow(xTotal,0.06);
-        if (mix->thModelActEos==0)FF_PhiFromActivity(mix,&T,P,x,actData,substPhiL);
+        if (mix->thModelActEos==0)FF_PhiAndActivity(mix,&T,P,x,actData,substPhiL);
         else{
             option='l';
             FF_MixPhiEOS(mix,&T,P,x,&option,substPhiL);//phi as liquid phase
@@ -2108,27 +2110,236 @@ void CALLCONV FF_DewT1(FF_MixData *mix,const double *P, const double y[],const d
             }
             //printf("Adj.liquid: P:%f substPhiL:%f,%f xTotal:%f dxTotal:%f\n",P,substPhiL[0],substPhiL[1],xTotal,dxTotal);
             counter=counter+1;
-            if (counter>200) return;
+            if (counter>100) return;
         }
         //printf("counter:%i dxTotal:%f\n",counter,dxTotal);
     } while (fabs(xTotal - 1) > 0.001);
 
     //check that the phases are different
-    double Vl,Vdiff,Ydiff=0;
+    double answerL[3],answerG[3],Vl,Vdiff,Ydiff=0;
     option='l';
     FF_MixVfromTPeos(mix,&T,P,x,&option,answerL,answerG,&state);
     Vl=answerL[0];
     option='g';
     FF_MixVfromTPeos(mix,&T,P,y,&option,answerL,answerG,&state);
-    Vdiff=fabs(Vl-answerG[0])/Vl>0.02;
+    Vdiff=fabs(Vl-answerG[0])/Vl;
     for(i=0;i<mix->numSubs;i++) Ydiff=Ydiff+fabs(x[i]-y[i]);
-    if((Vdiff>0.1)||((Vdiff>0.03)&&(Ydiff>0.02))){
+    //printf("P:%f Vl:%f Vdiff:%f Ydiff:%f\n",P,Vl,Vdiff,Ydiff);
+    if((Vdiff>0.1)||((Vdiff>0.03)&&(Ydiff>0.02))||((Vdiff>0.015)&&(Ydiff>0.08))||((Vdiff>0.005)&&(Ydiff>0.16))){
+        //printf("DewP:%f\n",P);
         *dT=T;
     }
-    //printf("DewT:%f n:%i\n",T,counter);
+    //*dT=T;
 }
 
 
+
+//Mixture dew temperature calculation, given P, composition, and thermo model to use
+void CALLCONV FF_DewT(FF_MixData *mix,const double *P, const double y[],const double *dTguess, double *dT,double x[],double substPhiL[],double substPhiG[]){
+    FF_CubicParam param;
+    FF_SubsActivityData actData[mix->numSubs];
+    *dT=0;
+    double Tl=0,Th=0,Tnew,xLow,xHigh;
+    double T=0;//to use in the computations
+    double k[mix->numSubs],newX[mix->numSubs],xTotal=0,dxTotal;
+    int i=0,j,n=4,counter=0;
+    char option,state;
+
+    if(mix->thModelActEos==0){//gamma-phi model previous considerations
+        if(mix->mixRule==FF_VdW) mix->mixRule=FF_VdWnoInt;//As BIP are for activity not use them in the gas pahse eos
+        //If the liquid model is based on activity and Vp all components must be below the critical pressure
+        if(mix->refVpEos==0){
+            for(i=0;i<mix->numSubs;i++){
+                if(*P>mix->baseProp[i].Pc) return;
+            }
+        }
+    }
+
+    if(*dTguess==0){  // without guess, equal for phi-phi and gamma-phi
+        double xTarget;  //1.9;//Entre 1.5 y 2.0. a mas presión mas alto
+        if (*P>20e5) xTarget=2.0;
+        else if (*P>10e5) xTarget=1.5;
+        else xTarget=1.0;
+        T=0;
+        for (i=0;i<mix->numSubs;i++) T=T+y[i]*mix->baseProp[i].Tc;
+        T=0.77*T;
+        option='g';
+
+        do{
+            //printf("P:%f\n",P);
+            //FF_MixPhiEOS(mix,&T,P,y,&option,substPhiG);//phi as gas phase
+            xTotal=0;
+            for (i=0;i<mix->numSubs;i++){  //Initial k and concentrations calculation
+                //x[i]=y[i]/(pow(0.000145*mix->baseProp[i].Pc,((1/(1.8*T)-1/(mix->baseProp[i].Tb*1.8))/(1/(mix->baseProp[i].Tc*1.8)-1/(mix->baseProp[i].Tb*1.8))))/ (0.000145 * *P));
+                x[i]=y[i]/exp(log(mix->baseProp[i].Pc/ *P)+5.373*(1+mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ T));
+                if (T>mix->baseProp[i].Tc) x[i]=x[i];
+                else x[i]=x[i];
+                xTotal=xTotal+x[i];
+            }
+            if (xTotal<xTarget){
+                Tl=T;
+                xLow=xTotal-xTarget;
+                Tnew=T/1.1;
+            }
+            else if(xTotal>xTarget){
+                Th=T;
+                xHigh=xTotal-xTarget;
+                Tnew=T*1.1;
+            }
+            //else break;//xTotal==1
+            if (Tl*Th>0) Tnew=Th-xLow*(Tl-Th)/(xHigh-xLow);//Tnew=(xHigh*Tl-xLow*Th)/(xHigh-xLow);
+            if ((fabs(T-Tnew)<0.001)||(fabs(xTotal-xTarget)<0.00010)) break;
+            else T=Tnew;
+            //printf("Counter:%i xTotal:%f New T:%f \n",counter,xTotal,T);
+            counter++;
+
+        } while(counter<20);
+    }
+    else{   //If we got a guess from the user
+        T=*dTguess;
+        option='g';
+        FF_MixPhiEOS(mix,&T,P,x,&option,substPhiG);//phi as gas phase
+        xTotal=0;
+        for (i=0;i<mix->numSubs;i++){
+            x[i]=y[i]*substPhiG[i];
+            xTotal=xTotal+x[i];
+            //printf("k[%i]:%f\n",i,k[i]);
+        }
+    }
+
+    //Now the final search
+    for (i=0;i<mix->numSubs;i++){
+        x[i]=x[i]/xTotal; //  normalization
+        //printf("T init:%f y[%i];%f\n",T,i,y[i]);
+    }
+    Tl=0;
+    Th=0;
+
+    /*
+    //alternative that works worse
+    do{
+        //printf("Initial T:%f\n",T);
+        //FF_MixPhiEOS(mix,&TbEst,P,x,&option,substPhiL);//phi as liquid phase, but it could be gas at this pressure
+        option='g';
+        FF_MixPhiEOS(mix,&T,P,y,&option,substPhiG);//phi as gas phase
+        if (mix->thModelActEos==0){
+            FF_PhiAndActivity(mix,&T,P,x,actData,substPhiL);
+        }
+        else{
+            option='l';
+            FF_MixPhiEOS(mix,&T,P,x,&option,substPhiL);//phi as liquid phase
+        }
+
+        xTotal=0;
+        for (i=0;i<mix->numSubs;i++)
+        {
+            x[i]=y[i]*substPhiG[i]/substPhiL[i];
+            xTotal=xTotal+x[i];
+        }
+        for (i=0;i<mix->numSubs;i++) x[i]=x[i]/xTotal; //we normalize y in order to obtain molar fractions
+        dxTotal=1.0;
+        //printf("Counter:%i T:%f xTotal:%f\n",counter,T,xTotal);
+        //for(i=0;i<mix->numSubs;i++)printf("Subst[%i] phiL:%f y:%f phiG:%f\n",i,substPhiL[i],y[i],substPhiG[i]);
+        while ((dxTotal > 0.0001)&&(fabs(xTotal - 1) > 0.0001)){
+            FF_MixPhiEOS(mix,&T,P,x,&option,substPhiL);//phi as gas phase
+            xTotal=0;
+            for (i=0;i<mix->numSubs;i++)
+            {
+                newX[i]=y[i]*substPhiG[i]/substPhiL[i];
+                xTotal=xTotal+newX[i];
+            }
+            //printf("Adj.gas: T:%f substPhiG:%f,%f xTotal:%f\n",T,substPhiG[0],substPhiG[1],xTotal);
+            for (i=0;i<mix->numSubs;i++) newX[i]=newX[i]/xTotal; //we normalize y in order to obtain molar fractions
+            dxTotal=0;
+            for (i=0;i<mix->numSubs;i++)
+            {
+                dxTotal=dxTotal+fabs(newX[i]-x[i]);
+                x[i]=newX[i];
+            }
+            counter=counter+1;
+            if (counter>500) return;
+        }
+
+        if (xTotal<1){
+            Tl=T;
+            xLow=xTotal-1;
+            Tnew=T/1.01;
+        }
+        else if(xTotal>1){
+            Th=T;
+            xHigh=xTotal-1;
+            Tnew=T*1.01;
+        }
+        else break;
+        if (Tl*Th>0) Tnew=Th-xLow*(Tl-Th)/(xHigh-xLow);//Tnew=(xHigh*Tl-xLow*Th)/(xHigh-xLow);//when we have already calculated Tl and Th
+        if ((fabs(T-Tnew)<0.001)||(fabs(xTotal-1)<0.0001)) break;
+        else T=Tnew;
+        counter++;
+        //printf("Counter:%i n:%i xTotal:%f New T:%f \n",counter,n,xTotal,T);
+    } while(counter<100);*/
+
+    do{
+        T=T*pow(xTotal,0.06);
+        if (mix->thModelActEos==0)FF_PhiAndActivity(mix,&T,P,x,actData,substPhiL);
+        else{
+            option='l';
+            FF_MixPhiEOS(mix,&T,P,x,&option,substPhiL);//phi as liquid phase
+        }
+        option='g';
+        FF_MixPhiEOS(mix,&T,P,y,&option,substPhiG);//phi as gas phase
+        xTotal=0;
+        for (i=0;i<mix->numSubs;i++)
+        {
+            x[i]=y[i]*substPhiG[i]/substPhiL[i];
+            xTotal=xTotal+x[i];
+        }
+        for (i=0;i<mix->numSubs;i++) x[i]=x[i]/xTotal; //we normalize y in order to obtain molar fractions
+        dxTotal=1.0;
+        //printf("Counter:%i new P:%f new xTotal:%f\n",counter,P,xTotal);
+        //for(i=0;i<mix->numSubs;i++)printf("Subst[%i] phiG:%f x:%f phiL:%f\n",i,substPhiG[i],x[i],substPhiL[i]);
+        while ((dxTotal > 0.001)&&(fabs(xTotal - 1) > 0.001)){
+            if(mix->thModelActEos==0) FF_PhiAndActivity(mix,&T,P,x,actData,substPhiL);
+            else{
+                option='l';
+                FF_MixPhiEOS(mix,&T,P,x,&option,substPhiL);
+            }
+
+            xTotal=0;
+            for (i=0;i<mix->numSubs;i++)
+            {
+                newX[i]=y[i]*substPhiG[i]/substPhiL[i];
+                xTotal=xTotal+newX[i];
+            }
+            for (i=0;i<mix->numSubs;i++) newX[i]=newX[i]/xTotal; //we normalize y in order to obtain molar fractions
+            dxTotal=0;
+            for (i=0;i<mix->numSubs;i++)
+            {
+                dxTotal=dxTotal+fabs(newX[i]-x[i]);
+                x[i]=newX[i];
+            }
+            //printf("Adj.liquid: P:%f substPhiL:%f,%f xTotal:%f dxTotal:%f\n",P,substPhiL[0],substPhiL[1],xTotal,dxTotal);
+            counter=counter+1;
+            if (counter>100) return;
+        }
+        //printf("counter:%i dxTotal:%f\n",counter,dxTotal);
+    } while (fabs(xTotal - 1) > 0.001);
+
+    //check that the phases are different
+    double answerL[3],answerG[3],Vl,Vdiff,Ydiff=0;
+    option='l';
+    FF_MixVfromTPeos(mix,&T,P,x,&option,answerL,answerG,&state);
+    Vl=answerL[0];
+    option='g';
+    FF_MixVfromTPeos(mix,&T,P,y,&option,answerL,answerG,&state);
+    Vdiff=fabs(Vl-answerG[0])/Vl;
+    for(i=0;i<mix->numSubs;i++) Ydiff=Ydiff+fabs(x[i]-y[i]);
+    //printf("P:%f Vl:%f Vdiff:%f Ydiff:%f\n",P,Vl,Vdiff,Ydiff);
+    if((Vdiff>0.1)||((Vdiff>0.03)&&(Ydiff>0.02))||((Vdiff>0.015)&&(Ydiff>0.08))||((Vdiff>0.005)&&(Ydiff>0.16))){
+        //printf("DewP:%f\n",P);
+        *dT=T;
+    }
+    //*dT=T;
+}
 
 //Temperature envelope of a binary mixture
 void CALLCONV FF_TemperatureEnvelope(FF_MixData *mix,const double *P, const int *nPoints, double c[],double bT[],double y[],double dT[],double x[]){
@@ -2144,8 +2355,8 @@ void CALLCONV FF_TemperatureEnvelope(FF_MixData *mix,const double *P, const int 
     for(i=0;i<*nPoints;i++){
         c[i]=i*interval;
     }
-    if(mix->eosType==FF_SAFTtype)FF_TbEOS(&mix->eosType,P,&mix->saftData[0],&Tb);
-    else FF_TbEOS(&mix->eosType,P,&mix->cubicData[0],&Tb);
+    if(mix->eosType==FF_SAFTtype)FF_TbEos(mix->eosType,*P,&mix->saftData[0],&Tb);
+    else FF_TbEos(mix->eosType,*P,&mix->cubicData[0],&Tb);
     bT[*nPoints - 1]=dT[*nPoints - 1]=Tb;
     x[*nPoints - 1]=y[*nPoints - 1]=1;
     //printf("bP:%f\n",bP[*numPoints - 1]);
@@ -2158,11 +2369,108 @@ void CALLCONV FF_TemperatureEnvelope(FF_MixData *mix,const double *P, const int 
         x[i]=out[0];
         //printf("c:%f bP:%f y:%f dP:%f x:%f\n",in[0],bP[i],y[i],dP[i],x[i]);
     }
-    if(mix->eosType==FF_SAFTtype)FF_TbEOS(&mix->eosType,P,&mix->saftData[1],&Tb);
-    else FF_TbEOS(&mix->eosType,P,&mix->cubicData[1],&Tb);
+    if(mix->eosType==FF_SAFTtype)FF_TbEos(mix->eosType,*P,&mix->saftData[1],&Tb);
+    else FF_TbEos(mix->eosType,*P,&mix->cubicData[1],&Tb);
     bT[0]=dT[0]=Tb;
     y[0]=x[0]=0;
 }
+
+//VL flash calculation, given T, P, feed composition, eos and mixing rule, using bubble and dew pressure as help
+//*****NOW OUT OF USE*****
+void CALLCONV FF_TwoPhasesPreFlashPT(FF_MixData *mix, const double *T,const double *P,const double f[],
+                                     double x[],double y[],double substPhiL[],double substPhiG[],double *beta){
+    int i,j,n;
+    double guess=0,bP=0,dP=0, pAux;
+    FF_BubbleP(mix,T,f,&guess,&bP,y,substPhiL,substPhiG);
+    FF_DewP(mix,T,f,&guess,&dP,x,substPhiL,substPhiG);
+    if (dP>bP){
+        pAux=bP;
+        bP=dP;
+        dP=pAux;
+    }
+
+    if ((*P>=bP)&&(bP>0)){
+        *beta=0;
+        for(i=0;i<mix->numSubs;i++){
+            x[i]=f[i];
+            y[i]=0.0;
+        }
+    }
+    else{
+        if ((*P<=dP)||(bP==0)||(dP==0)){
+            *beta=1;
+            for(i=0;i<mix->numSubs;i++){
+                y[i]=f[i];
+                x[i]=0.0;
+            }
+        }
+        else{
+            double k[mix->numSubs];
+            int numRep=10;
+            double a, fa, aNew, aOld=1e6, aMin,aMax,faMin,faMax;
+            double xTotal,yTotal;
+            char option;
+            for(i=0;i<mix->numSubs;i++){
+                k[i]=(*P-dP)*(y[i]/f[i]-f[i]/x[i])/(bP-dP)+f[i]/x[i];//we initialize k
+                //k[i]=exp(log(mix->baseProp[i].Pc/ *P)+5.373*(1-mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ *T));
+            }
+            a=0.5;//and initialize a
+            for(j=0;j<numRep;j++){//We will perform n times the solution of the Rachford-Rice equation
+                aMin=0;
+                aMax=0;
+                faMin=0;
+                faMax=0;
+                n=0;
+                do{ //find a for the given k
+                  fa=0;
+                  for(i=0;i<mix->numSubs;i++) fa=fa+(k[i]-1)*f[i]/(1+a*(k[i]-1));
+
+                  if (fa>0){
+                      aMax=a;
+                      faMax=fa;
+                      aNew=a*1.2;
+                  }
+                  else if (fa<0){
+                      aMin=a;
+                      faMin=fa;
+                      aNew=a*0.8;
+                  }
+                  if (!((aMin*aMax)==0)) aNew=aMin-faMin*(aMax-aMin)/(faMax-faMin);
+                  n++;
+                  //printf("j:%i n:%i a:%f fa:%f \n",j,n,a,fa);//printf("a:%f fa:%f faMin:%f faMax:%f \n",a,fa,faMin,faMax);
+                  if ((fabs(a-aNew)<0.0001)||(fabs(fa)<0.0001)) break;
+                  a=aNew;
+
+                }while (n<15);
+
+                xTotal=0;
+                yTotal=0;
+                for(i=0;i<mix->numSubs;i++){
+                    x[i]=f[i]/(1+a*(k[i]-1));
+                    xTotal=xTotal+x[i];
+                    y[i]=f[i]*k[i]/(1+a*(k[i]-1));
+                    yTotal=yTotal+y[i];
+                }
+                for(i=0;i<mix->numSubs;i++){
+                    x[i]=x[i]/xTotal;
+                    y[i]=y[i]/xTotal;
+                }
+                option='l';
+                FF_MixPhiEOS(mix,T,P,x,&option,substPhiL);
+                option='g';
+                FF_MixPhiEOS(mix,T,P,y,&option,substPhiG);
+
+                if (fabs(aOld-a)<0.0001) break;
+                aOld=a;
+                for(i=0;i<mix->numSubs;i++) k[i]=substPhiL[i]/substPhiG[i];
+
+            }
+            *beta=a;
+            //printf("x[0]:%f \n",x[0]);
+        }
+    }
+}
+
 
 //VL flash calculation, given T, P, feed composition, eos and mixing rule
 void CALLCONV FF_TwoPhasesFlashPT(FF_MixData *mix,const double *T,const double *P,const double f[],
@@ -2345,6 +2653,121 @@ void CALLCONV FF_TwoPhasesFlashPT(FF_MixData *mix,const double *T,const double *
             }
         }
     }
+}
+
+//VL flash calculation, given T, P, feed composition, eos and mixing rule, by sucesive substitution using Newton method, without too much checks
+void CALLCONV FF_TwoPhasesFlashPTn(FF_MixData *mix, const double *T,const double *P,const double f[],
+                                     double x[],double y[],double substPhiL[],double substPhiG[],double *beta){
+    double k[mix->numSubs];
+    int i,j,n,numRep=10;
+    double a, fa, faDer,aNew, aOld=1e6, aMin,aMax,faMin,faMax,Tcm;
+    double xTotal,yTotal;
+    char option,end;
+
+    option='l';
+    FF_MixPhiEOS(mix,T,P,f,&option,substPhiL);
+
+    for(i=0;i<mix->numSubs;i++){
+        k[i]=exp(log(mix->baseProp[i].Pc/ *P)+5.373*(1-mix->baseProp[i].w)*(1-mix->baseProp[i].Tc/ *T));//k initialization according to Wilson
+        //k[i]=substPhiL[i];
+    }
+    for(j=0;j<numRep;j++){//We will perform n times the solution of the Rachford-Rice equation
+        aMin=0;//bubble point
+        aMax=1;//dew point
+        faMin=-1;//taking into account just the liquid phase
+        faMax=1;//taking into account just the gas phase
+        for(i=0;i<mix->numSubs;i++){//Rachford-Rice equation for bubble and dew points
+            faMin=faMin+f[i]*k[i];
+            faMax=faMax-f[i]/k[i];
+        }
+        if((faMin>0)&&(faMax<0)){//Between the bubble and the dew point, we need to find the gas fraction
+            //printf("hola\n");
+            for(i=0;i<mix->numSubs;i++){//better acotation of the gas fraction
+                if(k[i]>1) aMin=fmax(aMin,(f[i]*k[i]-1)/(k[i]-1));
+                if(k[i]<1) aMax=fmin(aMax,(1-f[i])/(1-k[i]));
+            }
+            a=0.5*(aMin+aMax);//initial value of gas fraction
+            n=0;
+            do{
+                fa=0;
+                for(i=0;i<mix->numSubs;i++) fa=fa+f[i]*(k[i]-1)/(1-a+a*k[i]);//value of the Rachford-Rice equation
+                faDer=0;
+                for(i=0;i<mix->numSubs;i++) faDer=faDer-f[i]*pow((k[i]-1),2)/pow((1-a+a*k[i]),2);
+                aNew=a-fa/faDer;
+                n++;
+                if ((fabs(a-aNew)<0.0001)||(fabs(fa)<0.0001)) break;
+                a=aNew;
+            }while(n<10);
+            for(i=0;i<mix->numSubs;i++){//Once found the gas fraction we calculate the phases composition
+                x[i]=f[i]/(1+a*(k[i]-1));
+                y[i]=f[i]*k[i]/(1+a*(k[i]-1));
+            }
+            //normalization
+            xTotal=0;
+            yTotal=0;
+            for(i=0;i<mix->numSubs;i++){
+                xTotal=xTotal+x[i];
+                yTotal=yTotal+y[i];
+            }
+            for(i=0;i<mix->numSubs;i++){
+                x[i]=x[i]/xTotal;
+                y[i]=y[i]/yTotal;
+            }
+            option='l';
+            FF_MixPhiEOS(mix,T,P,x,&option,substPhiL);
+            option='g';
+            FF_MixPhiEOS(mix,T,P,y,&option,substPhiG);
+            if (fabs(aOld-a)<0.0001) break;//Once we have stabilized the gas fraction we have finished
+            aOld=a;
+            for(i=0;i<mix->numSubs;i++) k[i]=substPhiL[i]/substPhiG[i];
+        }
+        else if(faMin<=0){//bellow the bubble point with this k
+            a=0.0;
+            yTotal=0;
+            for(i=0;i<mix->numSubs;i++){
+                x[i]=f[i];
+                y[i]=f[i]*k[i];
+                yTotal=yTotal+y[i];
+            }
+            for(i=0;i<mix->numSubs;i++)  y[i]=y[i]/yTotal;
+            option='l';
+            FF_MixPhiEOS(mix,T,P,x,&option,substPhiL);
+            option='g';
+            FF_MixPhiEOS(mix,T,P,y,&option,substPhiG);
+            for(i=0;i<mix->numSubs;i++) k[i]=substPhiL[i]/substPhiG[i];
+            aOld=a;
+        }
+        else{//over the dew point with this k
+            a=1.0;
+            xTotal=0;
+            for(i=0;i<mix->numSubs;i++){
+                x[i]=f[i]/k[i];
+                y[i]=f[i];
+                xTotal=xTotal+x[i];
+            }
+            for(i=0;i<mix->numSubs;i++)  x[i]=x[i]/xTotal;
+            option='l';
+            FF_MixPhiEOS(mix,T,P,x,&option,substPhiL);
+            option='g';
+            FF_MixPhiEOS(mix,T,P,y,&option,substPhiG);
+            for(i=0;i<mix->numSubs;i++) k[i]=substPhiL[i]/substPhiG[i];
+            aOld=a;
+        }
+        end='y';
+        for(i=0;i<mix->numSubs;i++) if(fabs(x[i]-y[i])>0.001) end='n';//the proposed solution is nontrivial
+        if(end=='y'){
+            double dPguess=0,dP,z[mix->numSubs],PhiL[mix->numSubs],PhiG[mix->numSubs];
+            FF_DewP(mix,T,f,&dPguess,&dP,z,PhiL,PhiG);
+            if(dP>0){
+                if(*P<=dP) a=1.0;
+                else a=0.0;
+            }
+            break;
+        }
+
+    }
+    *beta=a;
+
 }
 
 //Mixture 2 phases flash, given P,T, composition, and thermo model to use. By simulated annealing global minimization of the reduced Gibbs energy
@@ -2725,10 +3148,317 @@ void CALLCONV FF_TwoPhasesFlashPTDE(FF_FeedData *data, double x[],double y[],dou
 
 }
 
+//VL flash calculation, given h, P, feed composition, eos and mixing rule, using bubble and dew temperature as help
+void CALLCONV FF_TwoPhasesPreFlashP_HS(FF_MixData *mix, char election, const double *E,const double *P,const double f[], double *T,
+                                     double x[],double y[],double *beta){
+    int i;
+    double guess=0,bT=0,dT=0, tAux;
+    double answerL[3],answerG[3];
+    char option,state;
+    FF_PhaseThermoProp th;
+    th.P=*P;
+    double Tl=0,Th=0,Tnew,Ed,Eb,Et,Elow,Ehigh;
+    int counter=0;
+    double substPhiL[mix->numSubs],substPhiG[mix->numSubs];
+    FF_DewT(mix,P,f,&guess,&dT,x,substPhiL,substPhiG);
+    FF_BubbleT(mix,P,f,&guess,&bT,y,substPhiL,substPhiG);
+
+    if (dT<bT){
+        tAux=bT;
+        bT=dT;
+        dT=tAux;
+    }
+
+    option='g';
+    FF_MixVfromTPeos(mix,&dT,P,f,&option,answerL,answerG,&state);
+    th.T=dT;
+    th.V=answerG[0];
+    for (i=0;i<mix->numSubs;i++)th.c[i]=f[i];
+    FF_MixThermoEOS(mix,&mix->refT,&mix->refP,&th);
+    if (election=='h')  Ed=th.H;
+    else if (election=='s') Ed=th.S;
+    //printf("H:%f dew T:%f dew V:%f dew H:%f  \n",*E,th.T,th.V,th.H);
+    if (*E>=Ed){
+        option='g';
+        *beta=1.0;
+        for(i=0;i<mix->numSubs;i++){
+            y[i]=f[i];
+            x[i]=0.0;
+        }
+        *T=dT;
+        Et=Ed;
+        do{
+            if (*E>Et){
+                Tl=*T;
+                Elow=Et;
+                Tnew=*T*1.08;
+            }
+            else if(*E<Et){
+                Th=*T;
+                Ehigh=Et;
+                Tnew=*T/1.08;
+            }
+            else break;
+            if (Tl*Th>0) Tnew=Tl+(*E-Elow)*(Th-Tl)/(Ehigh-Elow);//Tnew=(Ehigh*Tl-Elow*Th)/(Ehigh-Elow);
+            if ((fabs(*T-Tnew)<0.0001)||(fabs((Et-*E)/ *E)<0.000001)) break;
+            else *T=Tnew;
+            FF_MixVfromTPeos(mix,T,P,f,&option,answerL,answerG,&state);
+            th.T=*T;
+            th.V=answerG[0];
+            FF_MixThermoEOS(mix,&mix->refT,&mix->refP,&th);
+            if (election=='h')  Et=th.H;
+            else if (election=='s')Et=th.S;
+            counter++;
+            //printf("Counter:%i n:%i yTotal:%f New T:%f tpdg:%f\n",counter,n,yTotal,T,tpdg);
+        } while(counter<20);
+    }
+    else {
+        option='l';
+        FF_MixVfromTPeos(mix,&bT,P,f,&option,answerL,answerG,&state);
+        th.T=bT;
+        th.V=answerL[0];
+        for (i=0;i<mix->numSubs;i++)th.c[i]=f[i];
+        FF_MixThermoEOS(mix,&mix->refT,&mix->refP,&th);
+        //printf("H:%f bub T:%f bub V:%f bub H:%f  \n",*E,th.T,th.V,th.H);
+        if (election=='h') Eb=th.H;
+        else if (election=='s') Eb=th.S;
+        if (*E<=Eb){
+            option='l';
+            *beta=0.0;
+            for(i=0;i<mix->numSubs;i++){
+                x[i]=f[i];
+                y[i]=0.0;
+            }
+            *T=bT;
+            Et=Eb;
+            do{
+                if (*E>Et){
+                    Tl=*T;
+                    Elow=Et;
+                    Tnew=*T*1.08;
+                }
+                else if(*E<Et){
+                    Th=*T;
+                    Ehigh=Et;
+                    Tnew=*T/1.08;
+                }
+                else break;
+                if (Tl*Th>0) Tnew= Tl+(*E-Elow)*(Th-Tl)/(Ehigh-Elow);//(Ehigh*Tl-Elow*Th)/(Ehigh-Elow);
+                if ((fabs(*T-Tnew)<0.0001)||(fabs((Et-*E)/ *E)<0.000001)) break;
+                else *T=Tnew;
+                FF_MixVfromTPeos(mix,T,P,f,&option,answerL,answerG,&state);
+                th.T=*T;
+                th.V=answerL[0];
+                FF_MixThermoEOS(mix,&mix->refT,&mix->refP,&th);
+                if (election=='h')  Et=th.H;
+                else if (election=='s') Et=th.S;
+                counter++;
+                //printf("Counter:%i n:%i yTotal:%f New T:%f tpdg:%f\n",counter,n,yTotal,T,tpdg);
+            } while(counter<15);
+        }
+        else{
+            double Eliq,Egas;
+            *T=bT;//just in order to give some value
+            Et=Eb;
+            Th=dT;
+            Ehigh=Ed;
+            Tl=bT;
+            Elow=Eb;
+            do{ if (*E>Et){
+                    Tl=*T;
+                    Elow=Et;
+                    //Tnew=*T*1.1;
+                }
+                else if(*E<Et){
+                    Th=*T;
+                    Ehigh=Et;
+                    //Tnew=*T/1.1;
+                }
+                if (Tl*Th>0) Tnew=Tl+(Th-Tl)*(*E-Elow)/(Ehigh-Elow);//(Ehigh*Tl-Elow*Th)/(Ehigh-Elow);//(xmin*fxmax-xmax*fxmin)/(fxmax-fxmin)
+                if ((fabs(*T-Tnew)<0.0001)||(fabs((Et-*E)/ *E)<0.000001)) break;
+                else *T=Tnew;
+                FF_TwoPhasesFlashPTn(mix,T,P,f,x,y,substPhiL,substPhiG,beta);
+                option='l';
+                FF_MixVfromTPeos(mix,T,P,x,&option,answerL,answerG,&state);
+                th.T=*T;
+                th.V=answerL[0];
+                for (i=0;i<mix->numSubs;i++)th.c[i]=x[i];
+                FF_MixThermoEOS(mix,&mix->refT,&mix->refP,&th);
+                if (election=='h')  Eliq=th.H;
+                else if (election=='s') Eliq=th.S;
+                option='g';
+                FF_MixVfromTPeos(mix,T,P,y,&option,answerL,answerG,&state);
+                th.T=*T;
+                th.V=answerG[0];
+                for (i=0;i<mix->numSubs;i++)th.c[i]=y[i];
+                FF_MixThermoEOS(mix,&mix->refT,&mix->refP,&th);
+                if (election=='h')  Egas=th.H;
+                else if (election=='s') Egas=th.S;
+                Et = *beta * Egas +(1.0- *beta)*Eliq;
+                counter++;
+                //printf("H:%f T:%f Et:%f  \n",*E,*T,Et);
+                //printf("Counter:%i n:%i yTotal:%f New T:%f tpdg:%f\n",counter,n,yTotal,T,tpdg);
+            } while(counter<20);
+
+        }
+    }
+}
+
+//VL flash calculation, given h, P, feed composition, eos and mixing rule
+void CALLCONV FF_TwoPhasesFlashP_HS(FF_MixData *mix, char election, const double *E,const double *P,const double f[], double *T,
+                                     double x[],double y[],double *beta){
+    int i;
+    double Tcm;//theoretical critical temperature
+    double substPhiL[mix->numSubs],substPhiG[mix->numSubs];
+    double Eliq=0,Egas=0;
+     double answerL[3],answerG[3];
+    char option,state;
+    int side=0;
+    FF_PhaseThermoProp th;
+    th.P=*P;
+    double Tl=0,Th=0,Tnew,Et,Elow,Ehigh;
+    int counter=0;
+    Tcm=0;
+    for (i=0;i<mix->numSubs;i++)Tcm=Tcm+f[i]*mix->baseProp[i].Tc;
+    Tcm=1.4*Tcm;
+    *T=Tcm;
+    FF_TwoPhasesFlashPTn(mix,T,P,f,x,y,substPhiL,substPhiG,beta);
+    //printf("T:%f beta:%f\n",*T,*beta);
+    if(*beta>0){
+        option='g';
+        FF_MixVfromTPeos(mix,T,P,y,&option,answerL,answerG,&state);
+        th.T=*T;
+        th.V=answerG[0];
+        for (i=0;i<mix->numSubs;i++)th.c[i]=y[i];
+        FF_MixThermoEOS(mix,&mix->refT,&mix->refP,&th);
+        if (election=='h')  Egas=th.H;
+        else if (election=='s') Egas=th.S;
+        //printf("thG.H:%f\n",th.H);
+    }
+    if(*beta<1){
+        option='l';
+        FF_MixVfromTPeos(mix,T,P,x,&option,answerL,answerG,&state);
+        th.T=*T;
+        th.V=answerL[0];
+        for (i=0;i<mix->numSubs;i++)th.c[i]=x[i];
+        FF_MixThermoEOS(mix,&mix->refT,&mix->refP,&th);
+        if (election=='h')  Eliq=th.H;
+        else if (election=='s') Eliq=th.S;
+        //printf("thL.H:%f\n",th.H);
+    }
+    Et = *beta * Egas +(1.0- *beta)*Eliq;
+    do{ if (*E>Et){
+            Tl=*T;
+            Elow=Et;
+            Tnew=*T*1.15;
+            if(side==-1){
+                if((*E-Et)/(*E-Elow)<1) Ehigh=Ehigh-(*E-Et)*(*E-Et)/(*E-Elow);
+                else Ehigh=Ehigh-0.5*(Ehigh- *E);
+            }
+            side=-1;
+        }
+        else if(*E<Et){
+            Th=*T;
+            Ehigh=Et;
+            Tnew=*T/1.15;
+            if(side==1){
+                if((Et- *E)/(Ehigh- *E)<1) Elow=Elow-(*E-Et)*(Et - *E)/(Ehigh- *E);
+                else Elow=Elow+0.5*(*E-Elow);
+            }
+            side=1;
+        }
+        if (Tl*Th>0){
+            if(counter<=6)Tnew=(Tl+Th)/2;
+            else Tnew=Tl+(Th-Tl)*(*E-Elow)/(Ehigh-Elow);
+            //Tnew=Tl+(Th-Tl)*(*E-Elow)/(Ehigh-Elow);
+        }
+        if ((fabs(*T-Tnew)<0.0002)||(fabs((Et-*E)/ *E)<0.000001)) break;
+        else *T=Tnew;
+        FF_TwoPhasesFlashPTn(mix,T,P,f,x,y,substPhiL,substPhiG,beta);
+        //printf("counter:%i\n",counter);
+        Egas=0;
+        Eliq=0;
+        if(*beta>0){
+            option='g';
+            FF_MixVfromTPeos(mix,T,P,y,&option,answerL,answerG,&state);
+            th.T=*T;
+            th.V=answerG[0];
+            for (i=0;i<mix->numSubs;i++)th.c[i]=y[i];
+            FF_MixThermoEOS(mix,&mix->refT,&mix->refP,&th);
+            if (election=='h')  Egas=th.H;
+            else if (election=='s') Egas=th.S;
+        }
+        if(*beta<1){
+            option='l';
+            FF_MixVfromTPeos(mix,T,P,x,&option,answerL,answerG,&state);
+            th.T=*T;
+            th.V=answerL[0];
+            for (i=0;i<mix->numSubs;i++)th.c[i]=x[i];
+            FF_MixThermoEOS(mix,&mix->refT,&mix->refP,&th);
+            if (election=='h')  Eliq=th.H;
+            else if (election=='s') Eliq=th.S;
+        }
+        Et = *beta * Egas +(1.0- *beta)*Eliq;
+
+        counter++;
+    } while(counter<40);
+    //printf("counter:%i\n",counter);
+}
+
+//VL flash calculation, given gas fraction, P, feed composition, eos and mixing rule, using bubble and dew temperature as help
+void CALLCONV FF_TwoPhasesPreFlashPTheta(FF_MixData *mix, const char *opt, const double *Theta,const double *P,const double f[], double *T,
+                                     double x[],double y[],double substPhiL[],double substPhiG[]){
+    double lMW, gMW;
+    double guess=0,bT=0,dT=0, tAux;
+    double Tl=0,Th=0,Tnew,ThetaT,ThetaLow,ThetaHigh;
+    int counter=0;
+
+    FF_DewT(mix,P,f,&guess,&dT,x,substPhiL,substPhiG);
+    FF_BubbleT(mix,P,f,&guess,&bT,y,substPhiL,substPhiG);
+
+    if (dT<bT){
+        tAux=bT;
+        bT=dT;
+        dT=tAux;
+    }
+
+    *T=bT;//just in order to give some value
+    ThetaT=0;
+    Th=dT;
+    ThetaHigh=1;
+    Tl=bT;
+    ThetaLow=0;
+    do{ if (*Theta>ThetaT){
+            Tl=*T;
+            ThetaLow=ThetaT;
+        }
+        else if(*Theta<ThetaT){
+            Th=*T;
+            ThetaHigh=ThetaT;
+        }
+        if (Tl*Th>0) Tnew=Tl+(Th-Tl)*(*Theta-ThetaLow)/(ThetaHigh-ThetaLow);//(Ehigh*Tl-Elow*Th)/(Ehigh-Elow);//(xmin*fxmax-xmax*fxmin)/(fxmax-fxmin)
+        if ((fabs(*T-Tnew)<0.001)||(fabs(ThetaT-*Theta)<0.0001)) break;
+        else *T=Tnew;
+        FF_TwoPhasesFlashPTn(mix,T,P,f,x,y,substPhiL,substPhiG,&ThetaT);
+        if (strcmp(opt,"mass")==0){//converts ThetaT to mass fraction if needed
+            lMW=0;
+            gMW=0;
+            for(int i=0;i<mix->numSubs;i++){
+                lMW=lMW+x[i]*mix->baseProp[i].MW;
+                gMW=gMW+y[i]*mix->baseProp[i].MW;
+            }
+            ThetaT=ThetaT*gMW/(ThetaT*gMW+(1- ThetaT)*lMW);
+        }
+
+        counter++;
+    } while(counter<30);
+
+}
+
 //Mixture 2 phases flash, given P,H, composition, and thermo model to use.
 void CALLCONV FF_TwoPhasesFlashPH(FF_FeedData *data, FF_PhaseThermoProp phase[2],double *minT, double *maxT,double *refT,double *refP){
     double Tlow,Thigh,Hlow,Hhigh,answerL[3],answerG[3],V,Tplus,Hplus;
-    char option,state,stateLow,stateHigh;
+    char option,state;
     int i,j;
     if(*minT>0) Tlow=*minT;
     else Tlow=10;
@@ -2758,7 +3488,7 @@ void CALLCONV FF_TwoPhasesFlashPH(FF_FeedData *data, FF_PhaseThermoProp phase[2]
 
     for(j=0;j<10;j++){//Regula falsi loops to bracket the T solution
         phase[0].T=Tlow+(data->H-Hlow)*(Thigh-Tlow)/(Hhigh-Hlow);
-        FF_MixVfromTPeos(data->mix,&phase[0].T,&data->P,data->z,&option,answerL,answerG,state);
+        FF_MixVfromTPeos(data->mix,&phase[0].T,&data->P,data->z,&option,answerL,answerG,&state);
         if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
             phase[0].V=answerL[0];
         }
@@ -2778,7 +3508,7 @@ void CALLCONV FF_TwoPhasesFlashPH(FF_FeedData *data, FF_PhaseThermoProp phase[2]
 
     for(j=0;j<10;j++){
         FF_TwoPhasesFlashPT(data->mix,&phase[0].T,&data->P,data->z,phase[1].c,phase[0].c,phase[1].subsPhi,phase[0].subsPhi,&phase[0].fraction);
-        FF_MixVfromTPeos(data->mix,&phase[0].T,&data->P,phase[0].c,&option,answerL,answerG,state);
+        FF_MixVfromTPeos(data->mix,&phase[0].T,&data->P,phase[0].c,&option,answerL,answerG,&state);
         if((state=='L')||(state=='l')||(state=='U')||(state=='u')){
             phase[0].V=answerL[0];
         }

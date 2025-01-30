@@ -45,39 +45,59 @@
 #include "FFbasic.h"
 #include "FFeosPure.h"
 #include "FFphysprop.h"
+#include "FFeosMix.h"
+#include "FFequilibrium.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-
+//Solvers
+//-------
+//General Regula Falsi, Anderson-Bjork modified, solver for one variant equations. The supplied interval must comprise a root of the function
+EXP_IMP double FF_solverRegulaBase(double y, double (*f)(double, void *), void *data, double a, double b, double ftol, int niter);//a and b define the interval
+//Diferential evolution optimizer
+EXP_IMP void CALLCONV FF_OptimizerDE(unsigned nVar,double lb[],double ub[],double (*f)(unsigned,const double *,double *,const void *),void *data,double var[],double *error);
 
 //Error calculation functions
 //---------------------------
+//Recibe la ecuación a usar y establece los límites para las variables
+EXP_IMP void CALLCONV FF_CorrelationBounds(unsigned nVar, int eq, double lb[], double ub[]);
 //Determines the error of a correlation, using the given coefficients, and the real value supplied inside functionData
-EXP_IMP double CALLCONV FF_CorrelationError(unsigned nVar, const double coef[], double grad[], const  FF_CorrelationData *data);
+EXP_IMP double CALLCONV FF_CorrelationError(unsigned nVar, const double coef[], double grad[], const  void *data1);
 //Optimizer function for correlations. Recibes: number of variables to optimize, bounds, data to pass to the error calculation function. Returns optimized values and error
 EXP_IMP void CALLCONV FF_OptCorrelation(unsigned nVar,double lb[],double ub[],char enforceLimits[],const  FF_CorrelationData *data,double var[],double *error);
 //Determines the error of a SAFT EOS, using the given coefficients, and the real value supplied inside data
-double CALLCONV FF_SaftFitError(unsigned nVar, const double coef[], double grad[],  FF_SAFTFitData *data);
+EXP_IMP double CALLCONV FF_SaftFitError(unsigned nVar, const double coef[], double grad[],  const void *data1);
 //Determines the error of a cubic EOS, using the given coefficients, and the real value supplied inside data
 EXP_IMP double CALLCONV FF_CubicFitError(unsigned nVar, const double coef[], double grad[],  FF_CubicFitData *data);
+//Determines the error of a binary viscosity mixing rule, using the given coefficients, and the actual value supplied inside data
+EXP_IMP double CALLCONV FF_ViscFitError(unsigned nVar, const double coef[], double grad[],  FF_IntParamFitData *data);
+//Determines the error for a mixing rule, using the given coefficients, and the actual values supplied inside data
+EXP_IMP double CALLCONV FF_IntParamFitError(unsigned nVar, const double coef[], double grad[],  FF_IntParamFitData *data);
 
 
 //Determines the error of a  cubic EOS, using the given coefficients, and the real value supplied inside data
 EXP_IMP double CALLCONV FF_CubicPvRhoError(unsigned nVar, const double coef[], double grad[], FF_EOSPvRhoData *data);
+//Recibe la EOS a usar y establece los límites para las variables
+EXP_IMP void CALLCONV FF_SaftBounds(unsigned nVar, int eos, double lb[], double ub[]);
 //Determines the error of a SAFT EOS, using the given coefficients, and the real value supplied inside data
-double CALLCONV FF_SaftPvRhoError(unsigned nVar, const double coef[], double grad[],  FF_EOSPvRhoData *data);
+EXP_IMP double CALLCONV FF_SaftPvRhoError(unsigned nVar, const double coef[], double grad[],  FF_EOSPvRhoData *data);
 //Optimizer function for SAFT parameters. Recibes: number of variables to optimize, bounds, data to pass to the error calculation function. Returns optimized values and error
-void CALLCONV FF_OptSAFTparam(unsigned optTime,unsigned nVar,double lb[],double ub[],char enforceLimits[], FF_SAFTFitData *data,double var[],double *error);
+EXP_IMP void CALLCONV FF_OptSAFTparam(unsigned optTime,unsigned nVar,double lb[],double ub[],char enforceLimits[], FF_SAFTFitData *data,double var[],double *error);
 //Optimizer function for cubic EOS parameters. Recibes: number of variables to optimize, bounds, data to pass to the error calculation function. Returns optimized values and error
 EXP_IMP void CALLCONV FF_OptCubicParam(unsigned optTime,unsigned nVar,double lb[],double ub[],char enforceLimits[], FF_CubicFitData *data,double var[],double *error);
-
+//Optimizer function for viscosity BIPs. Recibes: number of variables to optimize, bounds, data to pass to the error calculation function. Returns optimized values and error
+EXP_IMP void CALLCONV FF_OptViscBIPs(unsigned optTime,unsigned nVar,double lb[],double ub[],char Tindependent, FF_IntParamFitData *data,double var[],double *error);
+//Optimizer function for fugacity BIPs. Recibes: number of variables to optimize, bounds, data to pass to the error calculation function. Returns optimized values and error
+EXP_IMP void CALLCONV FF_OptPhiBIPs(unsigned optTime,unsigned nVar,double lb[],double ub[],char Tindependent, FF_IntParamFitData *data,double var[],double *error);
+EXP_IMP double CALLCONV FF_PresDerError(unsigned nVar, const double coef[], double grad[], const  FF_SubstanceData *data);
+EXP_IMP void CALLCONV FF_FindCriticalPoint(const FF_SubstanceData *subs, double *Tc, double *Pc, double *Vc);
 //Other auxiliary functions
 //-------------------------
 //Determines the mass and molar fractions, given quatities in mass or moles
-EXP_IMP double CALLCONV FF_FractionsCalculation(unsigned nSubs, const double MW[], const double q[], const bool mass, double massFrac[], double molarFrac[]);
+EXP_IMP void CALLCONV FF_FractionsCalculation(unsigned nSubs, const double MW[], const double q[], const bool mass, double massFrac[], double molarFrac[]);
 
 #ifdef __cplusplus
 }

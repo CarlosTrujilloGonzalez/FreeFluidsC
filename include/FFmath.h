@@ -49,15 +49,11 @@ extern "C"
 {
 #endif
 
-void FFnormalize(int n, double x[]);
+EXP_IMP void CALLCONV FFnormalize(int n, double x[]);
 //Bisection solver for one variant equations. The supplied interval must comprise a root of the function
 void FFsolverBisection(double (*f)(double), double *x, double *y, int *n, double xmin, double xmax, double *ftol, int *niter);//xmin and xmax define the interval
-//Regula falsi solver for one variant equations. The supplied interval must comprise a root of the function
-void FFsolverRegula(double (*f)(double), double *x, double *y, int *n, double xmin, double xmax, double *ftol, int *niter);//xmin and xmax define the interval
-//Regula falsi, Illinois modified, solver for one variant equations. The supplied interval must comprise a root of the function
-void FFsolverRegulaI(double (*f)(double), double *x, double *y, int *n, double xmin, double xmax, double *ftol, int *niter);//xmin and xmax define the interval
-//Regula falsi, Anderson-Bjork modified, solver for one variant equations. The supplied interval must comprise a root of the function
-void FFsolverRegulaA(double (*f)(double), double *x, double *y, int *n, double xmin, double xmax, double *ftol, int *niter);//xmin and xmax define the interval
+//General Brent solver. Returns the solution. Uses auxiliary data for the function
+double FF_solverBrent(double y, double (*f)(double, void *), void *data, double a, double b, double ftol, int niter);//a and b define the interval
 void FFsolverNewtonND(double (*f)(double), double *x, double *y, int *n, double xini, double *ftol, int *niter);//xini is the initial guess
 void FFsolverNewton(double (*f)(double),double (*d)(double), double *x, double *y, int *n, double xini, double *ftol, int *niter);//xini is the initial guess
 void FFsolverIntervalNewtonND(double (*f)(double), double x[], double y[], int *n, double xmin, double xmax, double *ftol, int *niter);//xmin and xmax define the interval
