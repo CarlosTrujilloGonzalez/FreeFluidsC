@@ -28,11 +28,12 @@
 #include <math.h>
 #include <stdio.h>
 #include "FFmath.h"
-void FFnormalize(int n, double x[])
+EXP_IMP void CALLCONV FFnormalize(int n, double x[])
 {   double sum=0;
     int i;
     for (i=0;i<n;i++) sum+=x[i];
     for ( i = 0; i < n; i++) x[i] /= sum;
+    printf("kk\n");
 }
 void FFsolverBisection(double (*f)(double), double *x, double *y, int *n, double xmin, double xmax, double *ftol, int *niter)//xmin and xmax define the interval
 {
@@ -78,167 +79,80 @@ void FFsolverBisection(double (*f)(double), double *x, double *y, int *n, double
     return;
 }
 
-void FFsolverRegula(double (*f)(double), double *x, double *y, int *n, double xmin, double xmax, double *ftol, int *niter)//xmin and xmax define the interval
-{
-    *n=0;
-    double fxmin,fxmax;
-    fxmin=(*f)(xmin);
-    fxmax=(*f)(xmax);
-    if ((fxmin* fxmax)>0){//if both functions have the same sign, it is not sure that a root exists
-        double interval=xmax-xmin;
-        double xmed,fxmed;
-        xmed=xmin+interval*0.5;//we try in the middle point
-        fxmed=(*f)(xmed);
-        if (fxmin*fxmed<0){
-            xmin=xmed;
-            fxmin=fxmed;
+
+//General Brent solver. Returns the solution. Uses auxiliary data for the function
+double FF_solverBrent(double y, double (*f)(double, void *), void *data, double a, double b, double ftol, int niter){//a and b define the interval
+    double x,fx;
+    double c,d;
+    double r,er;
+    int n=0;
+    int side=0;
+    int mflag=1;
+    double fa,fb;
+    double ex,ea,eb,ec;//errors at x,a,b and c points
+    ea=(*f)(a,data)-y;
+    eb=(*f)(b,data)-y;
+    if (ea*eb>0){//if both functions have the same sign, it is not sure that a root exists
+        double xmed,exmed;
+        xmed=a+0.5*(b-a);//we try in the middle point
+        exmed=(*f)(xmed,data)-y;
+        if (ea*exmed<0){
+            a=xmed;
+            ea=exmed;
         }
-        else{
-            *x=*y=HUGE_VAL;
-            return;
+        else return x;
+    }
+    if ((ea<ftol)&&(ea>(-ftol))) x=a;//if one of the given value was already the solution
+    else if((eb<ftol)&&(eb>(-ftol))) x=b;
+    else{
+        if(fabs(ea)<fabs(eb)){
+            r=a;
+            er=ea;
+            a=b;
+            ea=eb;
+            b=r;
+            eb=er;
+        }
+        c=a;
+        ec=ea;
+        while (n<niter){
+            if(!((ec==ea)||(ec==eb))) x=(a*ea*ec)/((ea-eb)*(ea-ec))+(b*ea*ec)/((eb-ea)*(eb-ec))+(c*ea*eb)/((ec-ea)*(ec-eb));//quadratic interpolation
+            else x=a+(b-a)*ea/(ea-eb);//secant calculation
+            if(x < ((3 * a + b) / 4) || (x > b)){
+                mflag=1;
+                x=(a+b)/2;
+            }
+            else mflag=0;
+            fx=(*f)(x,data);
+            ex=fx-y;
+            d=c;
+            c=b;
+            ec=eb;
+            if ((ex<ftol)&&(ex>(-ftol))) break;
+            if ((eb*ex)>0){//x and b are at the same side
+                b=x;
+                eb=ex;
+            }
+            else{
+                a=x;
+                ea=ex;
+            }
+            if(fabs(ea)<fabs(eb)){
+                r=a;
+                er=ea;
+                a=b;
+                ea=eb;
+                b=r;
+                eb=er;
+            }
+            n++;
+            printf("n:%i a:%f ea:%f b:%f eb:%f x:%f fx:%f \n",n,a,ea,b,eb,x,fx);
         }
     }
-    else if ((fxmin* fxmax)==0){//if one of the given value was already the solution
-        if (fxmin==0){
-            *x=xmin;
-            *y=fxmin;
-        }
-        else{
-            *x=xmax;
-            *y=fxmax;
-        }
-        return;
-    }
-    while (*n<*niter){
-        *x=(xmin*fxmax-xmax*fxmin)/(fxmax-fxmin);
-        *y=(*f)(*x);
-        if ((*y<*ftol)&&(*y>(-*ftol))) break;
-        if ((fxmax* *y)>0){
-            xmax=*x;
-            fxmax=*y;
-        }
-        else{
-            xmin=*x;
-            fxmin=*y;
-        }
-        *n=*n+1;
-    }
-    return;
+    if (n>=niter) x=HUGE_VALF;
+    return x;
 }
 
-//Regula Falsi, Illinois modification
-void FFsolverRegulaI(double (*f)(double), double *x, double *y, int *n, double xmin, double xmax, double *ftol, int *niter)//xmin and xmax define the interval
-{
-    *n=0;
-    int side=0;
-    double fxmin,fxmax;
-    fxmin=(*f)(xmin);
-    fxmax=(*f)(xmax);
-    if ((fxmin* fxmax)>0){//if both functions have the same sign, it is not sure that a root exists
-        double interval=xmax-xmin;
-        double xmed,fxmed;
-        xmed=xmin+interval*0.5;//we try in the middle point
-        fxmed=(*f)(xmed);
-        if (fxmin*fxmed<0){
-            xmin=xmed;
-            fxmin=fxmed;
-        }
-        else{
-            *x=*y=HUGE_VAL;
-            return;
-        }
-    }
-    else if ((fxmin* fxmax)==0){//if one of the given value was already the solution
-        if (fxmin==0){
-            *x=xmin;
-            *y=fxmin;
-        }
-        else{
-            *x=xmax;
-            *y=fxmax;
-        }
-        return;
-    }
-    while (*n<*niter){
-        *x=(xmin*fxmax-xmax*fxmin)/(fxmax-fxmin);
-        *y=(*f)(*x);
-        if ((*y<*ftol)&&(*y>(-*ftol))) break;
-        if ((fxmax* *y)>0){
-            xmax=*x;
-            fxmax=*y;
-            if (side==-1) fxmin *= 0.5;
-            side = -1;
-        }
-        else{
-            xmin=*x;
-            fxmin=*y;
-            if (side==1) fxmax *= 0.5;
-            side = 1;
-        }
-        *n=*n+1;
-    }
-    return;
-}
-
-//Regula Falsi, Anderson-Bjork modification
-void FFsolverRegulaA(double (*f)(double), double *x, double *y, int *n, double xmin, double xmax, double *ftol, int *niter)//xmin and xmax define the interval
-{
-    *n=0;
-    int side=0;
-    double fxmin,fxmax;
-    fxmin=(*f)(xmin);
-    fxmax=(*f)(xmax);
-    if ((fxmin* fxmax)>0){//if both functions have the same sign, it is not sure that a root exists
-        double interval=xmax-xmin;
-        double xmed,fxmed;
-        xmed=xmin+interval*0.5;//we try in the middle point
-        fxmed=(*f)(xmed);
-        if (fxmin*fxmed<0){
-            xmin=xmed;
-            fxmin=fxmed;
-        }
-        else{
-            *x=*y=HUGE_VAL;
-            return;
-        }
-    }
-    else if ((fxmin* fxmax)==0){//if one of the given value was already the solution
-        if (fxmin==0){
-            *x=xmin;
-            *y=fxmin;
-        }
-        else{
-            *x=xmax;
-            *y=fxmax;
-        }
-        return;
-    }
-    while (*n<*niter){//we begin to seek for the root
-        *n=*n+1;
-        *x=(xmin*fxmax-xmax*fxmin)/(fxmax-fxmin);//This is the regula falsi method
-        *y=(*f)(*x);
-        if ((*y<*ftol)&&(*y>(-*ftol))) break;//if we have arrived to the solution exit
-        if ((fxmax * *y)>0){//if the proposed solution is of the same sign than f(xmin)
-            if (side==-1){//if it happened also in the previous loop
-                if ((1-*y/fxmax)>0) fxmin *= (1-*y/fxmax);//we decrease f(xmax) for the next loop calculation
-                else fxmin *= 0.5;
-            }
-            xmax=*x;
-            fxmax=*y;
-            side = -1;//we register than the solution was of the same sign than previous xmin
-        }
-        else{//If the prosed solution is of the same sign than f(smax) we apply the same technic
-            if (side==1){
-                if ((1-*y/fxmin)>0) fxmax *= (1-*y/fxmin);
-                else fxmax *= 0.5;
-            }
-            xmin=*x;
-            fxmin=*y;
-            side = 1;
-        }
-    }
-    return;
-}
 
 void FFsolverNewtonND(double (*f)(double), double *x, double *y, int *n, double xini, double *ftol, int *niter)//xini is the initial guess
 {

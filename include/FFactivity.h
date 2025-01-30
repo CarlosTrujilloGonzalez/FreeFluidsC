@@ -57,13 +57,13 @@ EXP_IMP void CALLCONV FF_ActivityUNIQUACFV(const int *numSubs,const  FF_BaseProp
 EXP_IMP void FF_ActivityFloryHuggins(const int *model,const  FF_BaseProp baseProp[2],const double chiData[15][15][6],const int *form,const double *T,const double x[2],FF_SubsActivityData actData[2]);
 
 //Calculates the common data, independent of the molar fraction and temperature for the UNIFAC model.
-void CALLCONV FF_UNIFACParams(int numData, const int data[][3], FF_UnifacData *uni);
+void CALLCONV FF_UNIFACParams(int numData, const int data[][3], const char *resDir, FF_UnifacData *uni);
 
 //Calculates activity coefficients according to UNIFAC model, at given T and composition.
 EXP_IMP void CALLCONV FF_ActivityUNIFAC(FF_UnifacData *data, const double *T, const double x[],FF_SubsActivityData actData[]);
 
 //Calculates activity coefficents according any of the defined models
-EXP_IMP void CALLCONV FF_Activity(FF_MixData *mix,double *T,double x[],FF_SubsActivityData actData[]);
+EXP_IMP void CALLCONV FF_Activity(FF_MixData *mix,const double *T,double x[],FF_SubsActivityData actData[]);
 
 //Calculates fugacity and activity coefficients, at given T and composition, from an activity model
 EXP_IMP void CALLCONV FF_PhiAndActivity(FF_MixData *mix,const double *T,const double *P,const double x[],FF_SubsActivityData actData[],double phi[]);

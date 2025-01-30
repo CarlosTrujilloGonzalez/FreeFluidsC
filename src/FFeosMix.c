@@ -31,6 +31,7 @@
 #include "FFbasic.h"
 #include "FFeosPure.h"
 #include "FFeosMix.h"
+#include "FFactivity.h"
 
 //Get mix data from an exported file
 EXP_IMP FF_MixData * CALLCONV FF_MixDataFromFile(const char *name){
@@ -50,70 +51,79 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromFile(const char *name){
 }
 
 //Create a mixture data structure from an array of substance data structures
-EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_SubstanceData *subsData[]){
-    if (*numSubs>15) *numSubs=15;
-    FF_MixData *mixData =(FF_MixData*) calloc(1,sizeof(FF_MixData));
+EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int numSubs,const FF_SubstanceData *subsData[]){
+    if (numSubs>15) numSubs=15;
+    //FF_MixData *mixData =(FF_MixData*) calloc(1,sizeof(FF_MixData));
+    static FF_MixData mixData;
     int h,i,j=0,k=0,l=0,m=0,n=0;
-    int unifacCompStd[*numSubs*10][3];//To contain the Unifac description for all substances
-    int unifacCompPSRK[*numSubs*10][3];
-    int unifacCompDort[*numSubs*10][3];
-    int unifacCompNist[*numSubs*10][3];
+    int unifacCompStd[numSubs*10][3];//To contain the Unifac description for all substances
+    int unifacCompPSRK[numSubs*10][3];
+    int unifacCompDort[numSubs*10][3];
+    int unifacCompNist[numSubs*10][3];
     int useUnifacStd=1,useUnifacPSRK=1,useUnifacDort=1,useUnifacNist=1;//Indicates that can be used in the mix. If not, we will put to 0
-    /*
-    for(i=0;i<*numSubs*10;i++){
+
+    /*for(i=0;i<numSubs*10;i++){
         unifacCompStd[i][0]=unifacCompStd[i][1]=unifacCompStd[i][2]=0;
     }*/
 
-    for(h=0;h<15;h++)for(i=0;i<15;i++)for(j=0;j<6;j++) mixData->intParam[h][i][j]=0;
-    mixData->numSubs=*numSubs;
-    for (i=0;i<*numSubs;i++){
-        mixData->id[i]=subsData[i]->id;
-        strcpy(mixData->subsName[i],subsData[i]->name);
-        strncpy(mixData->CAS[i],subsData[i]->CAS,22);
-        mixData->baseProp[i]=subsData[i]->baseProp;
-        if((mixData->baseProp[i].MWmono>0)&&(mixData->baseProp[i].MW>0)) mixData->baseProp[i].numMono=557;//mixData->baseProp[i].numMono=mixData->baseProp[i].MW/mixData->baseProp[i].MWmono;
-        else mixData->baseProp[i].numMono=1;
+    for(h=0;h<numSubs*10;h++) for(i=0;i<3;i++) {
+        unifacCompStd[h][i]=0;
+        unifacCompPSRK[h][i]=0;
+        unifacCompDort[h][i]=0;
+        unifacCompNist[h][i]=0;
+    }
+
+
+    for(h=0;h<15;h++)for(i=0;i<15;i++)for(j=0;j<6;j++) mixData.intParam[h][i][j]=0;
+    mixData.numSubs=numSubs;
+    for (i=0;i<numSubs;i++){
+        mixData.id[i]=subsData[i]->id;
+        strcpy(mixData.subsName[i],subsData[i]->name);
+        strncpy(mixData.CAS[i],subsData[i]->CAS,22);
+        mixData.baseProp[i]=subsData[i]->baseProp;
+        if((mixData.baseProp[i].MWmono>0)&&(mixData.baseProp[i].MW>0)) mixData.baseProp[i].numMono=557;//mixData.baseProp[i].numMono=mixData.baseProp[i].MW/mixData.baseProp[i].MWmono;
+        else mixData.baseProp[i].numMono=1;
         //In FF_UnifacData we will have the FV of the polymer and in baseProp that of the monomer
-        mixData->unifStdData.FV[i]=mixData->baseProp[i].numMono*subsData[i]->baseProp.FV;
-        mixData->unifPSRKData.FV[i]=mixData->baseProp[i].numMono*subsData[i]->baseProp.FV;
-        mixData->unifDortData.FV[i]=mixData->baseProp[i].numMono*subsData[i]->baseProp.FV;
-        mixData->unifNistData.FV[i]=mixData->baseProp[i].numMono*subsData[i]->baseProp.FV;
-        mixData->cubicData[i]=subsData[i]->cubicData;
-        mixData->saftData[i]=subsData[i]->saftData;
-        mixData->RI[i]=subsData[i]->RI;
-        mixData->cp0[i]=subsData[i]->cp0;
-        mixData->vp[i]=subsData[i]->vp;
-        mixData->hVsat[i]=subsData[i]->hVsat;
-        mixData->lCp[i]=subsData[i]->lCp;
-        mixData->lDens[i]=subsData[i]->lDens;
-        mixData->lVisc[i]=subsData[i]->lVisc;
-        mixData->lThC[i]=subsData[i]->lThC;
-        mixData->lSurfT[i]=subsData[i]->lSurfT;
-        mixData->cp0Corr[i]=subsData[i]->cp0Corr;
-        mixData->vpCorr[i]=subsData[i]->vpCorr;
-        mixData->btCorr[i]=subsData[i]->btCorr;
-        mixData->hVsatCorr[i]=subsData[i]->hVsatCorr;
-        mixData->lCpCorr[i]=subsData[i]->lCpCorr;
-        mixData->lDensCorr[i]=subsData[i]->lDensCorr;
-        mixData->lViscCorr[i]=subsData[i]->lViscCorr;
-        mixData->lThCCorr[i]=subsData[i]->lThCCorr;
-        mixData->lSurfTCorr[i]=subsData[i]->lSurfTCorr;
-        mixData->gDensCorr[i]=subsData[i]->gDensCorr;
-        mixData->gViscCorr[i]=subsData[i]->gViscCorr;
-        mixData->gThCCorr[i]=subsData[i]->gThCCorr;
-        mixData->unifStdData.model=FF_UNIFACStd;
-        mixData->unifPSRKData.model=FF_UNIFACPSRK;
-        mixData->unifDortData.model=FF_UNIFACDort;
-        mixData->unifNistData.model=FF_UNIFACNist;
+        mixData.unifStdData.FV[i]=mixData.baseProp[i].numMono*subsData[i]->baseProp.FV;
+        mixData.unifPSRKData.FV[i]=mixData.baseProp[i].numMono*subsData[i]->baseProp.FV;
+        mixData.unifDortData.FV[i]=mixData.baseProp[i].numMono*subsData[i]->baseProp.FV;
+        mixData.unifNistData.FV[i]=mixData.baseProp[i].numMono*subsData[i]->baseProp.FV;
+        mixData.cubicData[i]=subsData[i]->cubicData;
+        mixData.saftData[i]=subsData[i]->saftData;
+        mixData.RI[i]=subsData[i]->RI;
+        mixData.cp0[i]=subsData[i]->cp0;
+        mixData.vp[i]=subsData[i]->vp;
+        mixData.hVsat[i]=subsData[i]->hVsat;
+        mixData.lCp[i]=subsData[i]->lCp;
+        mixData.lDens[i]=subsData[i]->lDens;
+        mixData.lVisc[i]=subsData[i]->lVisc;
+        mixData.lThC[i]=subsData[i]->lThC;
+        mixData.lSurfT[i]=subsData[i]->lSurfT;
+        mixData.cp0Corr[i]=subsData[i]->cp0Corr;
+        mixData.vpCorr[i]=subsData[i]->vpCorr;
+        mixData.btCorr[i]=subsData[i]->btCorr;
+        mixData.hVsatCorr[i]=subsData[i]->hVsatCorr;
+        mixData.lCpCorr[i]=subsData[i]->lCpCorr;
+        mixData.lDensCorr[i]=subsData[i]->lDensCorr;
+        mixData.lViscCorr[i]=subsData[i]->lViscCorr;
+        mixData.lThCCorr[i]=subsData[i]->lThCCorr;
+        mixData.lSurfTCorr[i]=subsData[i]->lSurfTCorr;
+        mixData.gDensCorr[i]=subsData[i]->gDensCorr;
+        mixData.gViscCorr[i]=subsData[i]->gViscCorr;
+        mixData.gThCCorr[i]=subsData[i]->gThCCorr;
+        mixData.unifStdData.model=FF_UNIFACStd;
+        mixData.unifPSRKData.model=FF_UNIFACPSRK;
+        mixData.unifDortData.model=FF_UNIFACDort;
+        mixData.unifNistData.model=FF_UNIFACNist;
 
         j=0;
         if(subsData[i]->UnifStdSubg[j][1]<=0) useUnifacStd=0;
         while(subsData[i]->UnifStdSubg[j][1]>0){//Put the subgroups description of all substances in a single array
             unifacCompStd[k][0]=i;
             unifacCompStd[k][1]=subsData[i]->UnifStdSubg[j][0];
-            if(mixData->baseProp[i].MWmono>1) unifacCompStd[k][2]=mixData->baseProp[i].numMono*subsData[i]->UnifStdSubg[j][1];
+            if(mixData.baseProp[i].MWmono>1) unifacCompStd[k][2]=mixData.baseProp[i].numMono*subsData[i]->UnifStdSubg[j][1];
             else unifacCompStd[k][2]=subsData[i]->UnifStdSubg[j][1];
-            //printf("%i %i %i\n",unifacCompStd[k][0],unifacCompStd[k][1],unifacCompStd[k][2]);
+            //printf("Std %i %i %i\n",unifacCompStd[k][0],unifacCompStd[k][1],unifacCompStd[k][2]);
             j++;
             k++;
         }
@@ -122,9 +132,9 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_Subst
         while(subsData[i]->UnifPSRKSubg[j][1]>0){//Put the subgroups description of all substances in a single array
             unifacCompPSRK[l][0]=i;
             unifacCompPSRK[l][1]=subsData[i]->UnifPSRKSubg[j][0];
-            if(mixData->baseProp[i].MWmono>1) unifacCompPSRK[l][2]=mixData->baseProp[i].numMono*subsData[i]->UnifPSRKSubg[j][1];
+            if(mixData.baseProp[i].MWmono>1) unifacCompPSRK[l][2]=mixData.baseProp[i].numMono*subsData[i]->UnifPSRKSubg[j][1];
             else unifacCompPSRK[l][2]=subsData[i]->UnifPSRKSubg[j][1];
-            //printf("%i %i %i\n",unifacCompPSRK[l][0],unifacCompPSRK[l][1],unifacCompPSRK[l][2]);
+            //printf("PSRK %i %i %i\n",unifacCompPSRK[l][0],unifacCompPSRK[l][1],unifacCompPSRK[l][2]);
             j++;
             l++;
         }
@@ -133,9 +143,9 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_Subst
         while(subsData[i]->UnifDortSubg[j][0]>0){
             unifacCompDort[m][0]=i;
             unifacCompDort[m][1]=subsData[i]->UnifDortSubg[j][0];
-            if(mixData->baseProp[i].MWmono>1) unifacCompDort[m][2]=mixData->baseProp[i].numMono*subsData[i]->UnifDortSubg[j][1];
+            if(mixData.baseProp[i].MWmono>1) unifacCompDort[m][2]=mixData.baseProp[i].numMono*subsData[i]->UnifDortSubg[j][1];
             else unifacCompDort[m][2]=subsData[i]->UnifDortSubg[j][1];
-            //printf("%i %i %i\n",unifacCompDort[m][0],unifacCompDort[m][1],unifacCompDort[m][2]);
+            //printf("Dortmund %i %i %i\n",unifacCompDort[m][0],unifacCompDort[m][1],unifacCompDort[m][2]);
             j++;
             m++;
         }
@@ -144,77 +154,91 @@ EXP_IMP FF_MixData * CALLCONV FF_MixDataFromSubsData(int *numSubs,const FF_Subst
         while(subsData[i]->UnifNistSubg[j][0]>0){
             unifacCompNist[n][0]=i;
             unifacCompNist[n][1]=subsData[i]->UnifNistSubg[j][0];
-            if(mixData->baseProp[i].MWmono>1) unifacCompNist[n][2]=mixData->baseProp[i].numMono*subsData[i]->UnifNistSubg[j][1];
+            if(mixData.baseProp[i].MWmono>1) unifacCompNist[n][2]=mixData.baseProp[i].numMono*subsData[i]->UnifNistSubg[j][1];
             else unifacCompNist[n][2]=subsData[i]->UnifNistSubg[j][1];
-            //printf("%i %i %i\n",unifacCompNist[n][0],unifacCompNist[n][1],unifacCompNist[n][2]);
+            //printf("Nist %i %i %i\n",unifacCompNist[n][0],unifacCompNist[n][1],unifacCompNist[n][2]);
             j++;
             n++;
         }
     }
     //printf(" %i %i %i %i\n",k,unifacCompStd[k][0],unifacCompStd[k][1],unifacCompStd[k][2]);
-    if(useUnifacStd==1) FF_UNIFACParams(k,unifacCompStd,&mixData->unifStdData);
-    if(useUnifacPSRK==1) FF_UNIFACParams(l,unifacCompPSRK,&mixData->unifPSRKData);
-    if(useUnifacDort==1) FF_UNIFACParams(m,unifacCompDort,&mixData->unifDortData);
-    if(useUnifacNist==1) FF_UNIFACParams(n,unifacCompNist,&mixData->unifNistData);
-    return mixData;
+    printf("Std:%i PSRK:%i Dort:%i Nist:%i\n",useUnifacStd,useUnifacPSRK,useUnifacDort,useUnifacNist==1);
+    char path[FILENAME_MAX]="";
+    if(useUnifacStd==1) FF_UNIFACParams(k,unifacCompStd,path,&mixData.unifStdData);
+    if(useUnifacPSRK==1) FF_UNIFACParams(l,unifacCompPSRK,path,&mixData.unifPSRKData);
+    if(useUnifacDort==1) FF_UNIFACParams(m,unifacCompDort,path,&mixData.unifDortData);
+    if(useUnifacNist==1) FF_UNIFACParams(n,unifacCompNist,path,&mixData.unifNistData);
+    return &mixData;
 
 }
 
 //Fill a Mixture data structure from an array of substance data structures
-EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int *numSubs,FF_SubstanceData *subsData[],FF_MixData *mixData){
-    if (*numSubs>15) *numSubs=15;
+EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int numSubs,FF_SubstanceData subsData[], const char *path, FF_MixData *mixData){
+    int ver=0;
+    if (numSubs>15) numSubs=15;
     int h,i,j=0,k=0,l=0,m=0,n=0;
-    int unifacCompStd[*numSubs*10][3];//To contain the Unifac description for all substances:substance,subgroup,number
-    int unifacCompPSRK[*numSubs*10][3];
-    int unifacCompDort[*numSubs*10][3];
-    int unifacCompNist[*numSubs*10][3];
+    int unifacCompStd[numSubs*10][3];//To contain the Unifac description for all substances, one after another:substance,subgroup,number
+    int unifacCompPSRK[numSubs*10][3];
+    int unifacCompDort[numSubs*10][3];
+    int unifacCompNist[numSubs*10][3];
     int useUnifacStd=1,useUnifacPSRK=1,useUnifacDort=1,useUnifacNist=1;//Indicates that can be used in the mix. If not, we will put to 0
-    for(i=0;i<*numSubs*10;i++){
+
+    for(i=0;i<numSubs*10;i++){
         unifacCompStd[i][0]=unifacCompStd[i][1]=unifacCompStd[i][2]=0;
     }
-    for(h=0;h<*numSubs*10;h++) for(i=0;i<3;i++) {
+
+    for(h=0;h<numSubs*10;h++) for(i=0;i<3;i++) {
         unifacCompStd[h][i]=0;
         unifacCompPSRK[h][i]=0;
         unifacCompDort[h][i]=0;
         unifacCompNist[h][i]=0;
     }
 
-    mixData->numSubs=*numSubs;
+    mixData->numSubs=numSubs;
 
-    for (i=0;i<*numSubs;i++){
-        mixData->id[i]=subsData[i]->id;
-        strcpy(mixData->subsName[i],subsData[i]->name);
-        mixData->baseProp[i]=subsData[i]->baseProp;
+    for (i=0;i<numSubs;i++){
+        mixData->id[i]=subsData[i].id;
+        strcpy(mixData->subsName[i],subsData[i].name);
+        strcpy(mixData->CAS[i],subsData[i].CAS);
+        mixData->baseProp[i]=subsData[i].baseProp;
         if((mixData->baseProp[i].MWmono>0)&&(mixData->baseProp[i].MW>0)) mixData->baseProp[i].numMono=557;//mixData->baseProp[i].numMono=mixData->baseProp[i].MW/mixData->baseProp[i].MWmono;
         else mixData->baseProp[i].numMono=1;
         //In FF_UnifacData we will have the FV of the polymer and in baseProp that of the monomer
 
-        mixData->unifStdData.FV[i]=mixData->baseProp[i].numMono*subsData[i]->baseProp.FV;
-        mixData->unifPSRKData.FV[i]=mixData->baseProp[i].numMono*subsData[i]->baseProp.FV;
-        mixData->unifDortData.FV[i]=mixData->baseProp[i].numMono*subsData[i]->baseProp.FV;
-        mixData->unifNistData.FV[i]=mixData->baseProp[i].numMono*subsData[i]->baseProp.FV;
-        mixData->cubicData[i]=subsData[i]->cubicData;
-        mixData->saftData[i]=subsData[i]->saftData;
-        mixData->cp0[i]=subsData[i]->cp0;
-        mixData->vp[i]=subsData[i]->vp;
-        mixData->hVsat[i]=subsData[i]->hVsat;
-        mixData->lCp[i]=subsData[i]->lCp;
-        mixData->lDens[i]=subsData[i]->lDens;
-        mixData->lVisc[i]=subsData[i]->lVisc;
-        mixData->lThC[i]=subsData[i]->lThC;
-        mixData->lSurfT[i]=subsData[i]->lSurfT;
-        mixData->cp0Corr[i]=subsData[i]->cp0Corr;
-        mixData->vpCorr[i]=subsData[i]->vpCorr;
-        mixData->btCorr[i]=subsData[i]->btCorr;
-        mixData->hVsatCorr[i]=subsData[i]->hVsatCorr;
-        mixData->lCpCorr[i]=subsData[i]->lCpCorr;
-        mixData->lDensCorr[i]=subsData[i]->lDensCorr;
-        mixData->lViscCorr[i]=subsData[i]->lViscCorr;
-        mixData->lThCCorr[i]=subsData[i]->lThCCorr;
-        mixData->lSurfTCorr[i]=subsData[i]->lSurfTCorr;
-        mixData->gDensCorr[i]=subsData[i]->gDensCorr;
-        mixData->gViscCorr[i]=subsData[i]->gViscCorr;
-        mixData->gThCCorr[i]=subsData[i]->gThCCorr;
+        mixData->unifStdData.FV[i]=mixData->baseProp[i].numMono*subsData[i].baseProp.FV;
+        mixData->unifPSRKData.FV[i]=mixData->baseProp[i].numMono*subsData[i].baseProp.FV;
+        mixData->unifDortData.FV[i]=mixData->baseProp[i].numMono*subsData[i].baseProp.FV;
+        mixData->unifNistData.FV[i]=mixData->baseProp[i].numMono*subsData[i].baseProp.FV;
+        mixData->cubicData[i]=subsData[i].cubicData;
+        mixData->saftData[i]=subsData[i].saftData;
+
+        //Now preparation for using induced association
+        if ((subsData[i].saftData.epsilonAB==0)&&(subsData[i].baseProp.mu>0.8)){
+            mixData->saftData[i].nPos=1;
+            mixData->saftData[i].nNeg=2;
+            //printf("nPos:%i \n",mixData->saftData[i].nPos);
+        }
+
+        mixData->cp0[i]=subsData[i].cp0;
+        mixData->vp[i]=subsData[i].vp;
+        mixData->hVsat[i]=subsData[i].hVsat;
+        mixData->lCp[i]=subsData[i].lCp;
+        mixData->lDens[i]=subsData[i].lDens;
+        mixData->lVisc[i]=subsData[i].lVisc;
+        mixData->lThC[i]=subsData[i].lThC;
+        mixData->lSurfT[i]=subsData[i].lSurfT;
+        mixData->cp0Corr[i]=subsData[i].cp0Corr;
+        mixData->vpCorr[i]=subsData[i].vpCorr;
+        mixData->btCorr[i]=subsData[i].btCorr;
+        mixData->hVsatCorr[i]=subsData[i].hVsatCorr;
+        mixData->lCpCorr[i]=subsData[i].lCpCorr;
+        mixData->lDensCorr[i]=subsData[i].lDensCorr;
+        mixData->lViscCorr[i]=subsData[i].lViscCorr;
+        mixData->lThCCorr[i]=subsData[i].lThCCorr;
+        mixData->lSurfTCorr[i]=subsData[i].lSurfTCorr;
+        mixData->gDensCorr[i]=subsData[i].gDensCorr;
+        mixData->gViscCorr[i]=subsData[i].gViscCorr;
+        mixData->gThCCorr[i]=subsData[i].gThCCorr;
 
         mixData->unifStdData.model=FF_UNIFACStd;
         mixData->unifPSRKData.model=FF_UNIFACPSRK;
@@ -222,60 +246,60 @@ EXP_IMP void CALLCONV FF_MixFillDataWithSubsData(int *numSubs,FF_SubstanceData *
         mixData->unifNistData.model=FF_UNIFACNist;
 
         j=0;
-        if(subsData[i]->UnifStdSubg[j][1]<=0) useUnifacStd=0;
-        while(subsData[i]->UnifStdSubg[j][1]>0){//Put the subgroups description of all substances in a single array
+        if(subsData[i].UnifStdSubg[j][1]<=0) useUnifacStd=0;//if one substance doesn't have this Unifac description no calculation can be made
+        while(subsData[i].UnifStdSubg[j][1]>0){//Put the subgroups description of all substances in a single array of substance/subgroup/quantity
             unifacCompStd[k][0]=i;
-            unifacCompStd[k][1]=subsData[i]->UnifStdSubg[j][0];
-            if(mixData->baseProp[i].MWmono>1) unifacCompStd[k][2]=mixData->baseProp[i].numMono*subsData[i]->UnifStdSubg[j][1];
-            else unifacCompStd[k][2]=subsData[i]->UnifStdSubg[j][1];
-            //printf("%i %i %i\n",unifacCompStd[k][0],unifacCompStd[k][1],unifacCompStd[k][2]);
+            unifacCompStd[k][1]=subsData[i].UnifStdSubg[j][0];
+            if(mixData->baseProp[i].MWmono>1) unifacCompStd[k][2]=mixData->baseProp[i].numMono*subsData[i].UnifStdSubg[j][1];
+            else unifacCompStd[k][2]=subsData[i].UnifStdSubg[j][1];
+            if (ver==1) printf("Temp Unifac Std: Substance:%i Subgroup:%i Quantity:%i\n",unifacCompStd[k][0],unifacCompStd[k][1],unifacCompStd[k][2]);
             j++;
             k++;
         }
 
         j=0;
-        if(subsData[i]->UnifPSRKSubg[j][1]<=0) useUnifacPSRK=0;
-        while(subsData[i]->UnifPSRKSubg[j][1]>0){
+        if(subsData[i].UnifPSRKSubg[j][1]<=0) useUnifacPSRK=0;
+        while(subsData[i].UnifPSRKSubg[j][1]>0){
             unifacCompPSRK[l][0]=i;
-            unifacCompPSRK[l][1]=subsData[i]->UnifPSRKSubg[j][0];
-            if(mixData->baseProp[i].MWmono>1) unifacCompPSRK[l][2]=mixData->baseProp[i].numMono*subsData[i]->UnifPSRKSubg[j][1];
-            else unifacCompPSRK[l][2]=subsData[i]->UnifPSRKSubg[j][1];
-            //printf("%i %i %i\n",unifacCompPSRK[l][0],unifacCompPSRK[l][1],unifacCompPSRK[l][2]);
+            unifacCompPSRK[l][1]=subsData[i].UnifPSRKSubg[j][0];
+            if(mixData->baseProp[i].MWmono>1) unifacCompPSRK[l][2]=mixData->baseProp[i].numMono*subsData[i].UnifPSRKSubg[j][1];
+            else unifacCompPSRK[l][2]=subsData[i].UnifPSRKSubg[j][1];
+            if (ver==1) printf("Temp Unifac PSRK: %i %i %i\n",unifacCompPSRK[l][0],unifacCompPSRK[l][1],unifacCompPSRK[l][2]);
             j++;
             l++;
         }
+
         j=0;
-        if(subsData[i]->UnifDortSubg[j][0]<=0) useUnifacDort=0;
-        while(subsData[i]->UnifDortSubg[j][0]>0){
+        if(subsData[i].UnifDortSubg[j][0]<=0) useUnifacDort=0;
+        while(subsData[i].UnifDortSubg[j][0]>0){
             unifacCompDort[m][0]=i;
-            unifacCompDort[m][1]=subsData[i]->UnifDortSubg[j][0];
-            if(mixData->baseProp[i].MWmono>1) unifacCompDort[m][2]=mixData->baseProp[i].numMono*subsData[i]->UnifDortSubg[j][1];
-            else unifacCompDort[m][2]=subsData[i]->UnifDortSubg[j][1];
-            //printf("%i %i %i\n",unifacCompDort[m][0],unifacCompDort[m][1],unifacCompDort[m][2]);
+            unifacCompDort[m][1]=subsData[i].UnifDortSubg[j][0];
+            if(mixData->baseProp[i].MWmono>1) unifacCompDort[m][2]=mixData->baseProp[i].numMono*subsData[i].UnifDortSubg[j][1];
+            else unifacCompDort[m][2]=subsData[i].UnifDortSubg[j][1];
+            if (ver==1) printf("Temp Unifac Dortmund: %i %i %i\n",unifacCompDort[m][0],unifacCompDort[m][1],unifacCompDort[m][2]);
             j++;
             m++;
         }
 
         j=0;
-        if(subsData[i]->UnifNistSubg[j][0]<=0)useUnifacNist=0;
-        while(subsData[i]->UnifNistSubg[j][0]>0){
+        if(subsData[i].UnifNistSubg[j][0]<=0)useUnifacNist=0;
+        while(subsData[i].UnifNistSubg[j][0]>0){
             unifacCompNist[n][0]=i;
-            unifacCompNist[n][1]=subsData[i]->UnifNistSubg[j][0];
-            if(mixData->baseProp[i].MWmono>1) unifacCompNist[n][2]=mixData->baseProp[i].numMono*subsData[i]->UnifNistSubg[j][1];
-            else unifacCompNist[n][2]=subsData[i]->UnifNistSubg[j][1];
-            //printf("%i %i %i\n",unifacCompNist[n][0],unifacCompNist[n][1],unifacCompNist[n][2]);
+            unifacCompNist[n][1]=subsData[i].UnifNistSubg[j][0];
+            if(mixData->baseProp[i].MWmono>1) unifacCompNist[n][2]=mixData->baseProp[i].numMono*subsData[i].UnifNistSubg[j][1];
+            else unifacCompNist[n][2]=subsData[i].UnifNistSubg[j][1];
+            if (ver==1) printf("Temp Unifac Nist: %i %i %i\n",unifacCompNist[n][0],unifacCompNist[n][1],unifacCompNist[n][2]);
             j++;
             n++;
         }
+
     }
 
-    //printf(" %i %i %i %i\n",k,unifacCompStd[k][0],unifacCompStd[k][1],unifacCompStd[k][2]);
-
-    if(useUnifacStd==1)FF_UNIFACParams(k,unifacCompStd,&mixData->unifStdData);
-    if(useUnifacPSRK==1)FF_UNIFACParams(l,unifacCompPSRK,&mixData->unifPSRKData);
-    if(useUnifacDort==1)FF_UNIFACParams(m,unifacCompDort,&mixData->unifDortData);
-    if(useUnifacNist==1)FF_UNIFACParams(n,unifacCompNist,&mixData->unifNistData);
-
+    if(useUnifacStd==1)FF_UNIFACParams(k,unifacCompStd,path,&mixData->unifStdData);
+    if(useUnifacPSRK==1)FF_UNIFACParams(l,unifacCompPSRK,path,&mixData->unifPSRKData);
+    if(useUnifacDort==1)FF_UNIFACParams(m,unifacCompDort,path,&mixData->unifDortData);
+    if(useUnifacNist==1)FF_UNIFACParams(n,unifacCompNist,path,&mixData->unifNistData);
+    //return;
 }
 
 //Write a mixture data to a file. Adds ".md" extension
@@ -297,14 +321,15 @@ EXP_IMP void CALLCONV FF_MixDataToFile(const char *name,FF_MixData *mix){
 //-----------------------------------------------------------------------------------------------------------------------------------
 void CALLCONV FF_MixParamXderCubicEOS(const int *rule,const double *T,const int *numSubs,const  FF_CubicEOSdata data[],
         const double pintParam[15][15][6],const double x[], FF_CubicParam *param,double dTheta_dXi[],double db_dXi[],double dc_dXi[]){
+    int ver=0;
     int i,j;
-    double k,kInv,l,a,aInv,b,Co;
+    double k,kInv,l,a,aInv,b,Co0,Co;
     FF_CubicParam sParam[*numSubs];
     for (i=0;i< *numSubs;i++)//First we get the parameters of the individual substances
     {
         FF_FixedParamCubic(&data[i],&sParam[i]);
         FF_ThetaDerivCubic(T,&data[i],&sParam[i]);
-        //printf("i a,b,Theta,dTheta,d2Theta,x: %i %f %f %f %f %f %f\n",i,sParam[i].a,sParam[i].b,sParam[i].Theta,sParam[i].dTheta,sParam[i].d2Theta,x[i]);
+        if (ver==1) printf(" i a,b,Theta,dTheta,d2Theta,x: %i %f %f %f %f %f %f\n",i,sParam[i].a,sParam[i].b,sParam[i].Theta,sParam[i].dTheta,sParam[i].d2Theta,x[i]);
     }
     param->Theta=0;
     param->b=0;
@@ -374,7 +399,7 @@ void CALLCONV FF_MixParamXderCubicEOS(const int *rule,const double *T,const int 
         break;
     case FF_MKP://In MKP th 3 first parameters are for k, forth and fith for lambda and the sixth for l (covolumen correction)
         {
-        double lambda;
+        double kij,kji,lambda;
         double a2[*numSubs][*numSubs];//It is the secon part of combined Theta[i,j] calculation in MKP rule
         double a3[*numSubs];//Is the summatory of second part of Theta calculation for each substance, and it derivative regarding T
         /**/
@@ -390,20 +415,29 @@ void CALLCONV FF_MixParamXderCubicEOS(const int *rule,const double *T,const int 
                 Co=fabs(pow(sParam[i].Theta*sParam[j].Theta,0.5));
                 //printf("i,j k: %i %i %f\n",i,j,pintParam[i][j][0]);
                 //Three values are used for the calculation of the mixture parameter k[i,j]=k[j,i], the forth for l[i,j]=l[j,i], used in the calculation of b[i,j]
-                k=pintParam[i][j][0] + pintParam[i][j][1]* *T+pintParam[i][j][2]/ *T ;
+                if(i!=j){
+                    kij=pintParam[i][j][0] + pintParam[i][j][1]* *T+pintParam[i][j][2]/ *T ;//using same coef than Panagiotopoulos-Reid
+                    kji=pintParam[j][i][0] + pintParam[j][i][1]* *T+pintParam[j][i][2]/ *T ;
+                }
+                else kij=kji=0;
+                k=0.5*(kij+kji);
+                //k=pintParam[i][j][0] + pintParam[i][j][1]* *T+pintParam[i][j][2]/ *T ;
                 //printf("i,j k,dk,d2k: %i %i %f %f %f\n",i,j,k,dk,d2k);
                 a=Co*(1-k);
                 param->Theta=param->Theta+x[i]*x[j]*a;
                 dTheta_dXi[i]=dTheta_dXi[i]+x[j]*2*a;//This is the 1st part composition derivative (VdW) of Theta regarding x[i].
+                //and taking into account that when calculate the term [j][i] we duplicate Theta and its derivatives
                 //printf("a,da,d2a[i][j]: %i %i %f %f %f\n",i,j,a*1e3,da*1e3,d2a*1e3);
-                b=(sParam[i].b+sParam[j].b)/2;
+                l=pintParam[i][j][3];
+                b=(1-l)*(sParam[i].b+sParam[j].b)/2;
                 param->b=param->b+x[i]*x[j]*b;
                 db_dXi[i]=db_dXi[i]+x[j]*2*b;
 
                 //Now the additional part of Theta
                 if(i!=j){
-                    lambda=pintParam[j][i][3] + pintParam[j][i][4]* *T + pintParam[j][i][5]/ *T ;
-                    a2[i][j]= x[j]*pow(fabs(Co*lambda),0.333333);
+                    lambda=kji-kij;
+                    //lambda=pintParam[j][i][3] + pintParam[j][i][4]* *T + pintParam[j][i][5]/ *T ;
+                    a2[i][j]= x[j]*pow(fabs(Co*lambda),0.3333333);
                     if (lambda<0) a2[i][j]=-a2[i][j];
                 }
                 else{
@@ -415,13 +449,13 @@ void CALLCONV FF_MixParamXderCubicEOS(const int *rule,const double *T,const int 
             }
             param->Theta=param->Theta+x[i]*pow(a3[i],3);//We increase Theta and its derivatives in the part special for MKP
         }
-        for (i=0;i<*numSubs;i++)//And now dTheta/dX[i]
+        for (i=0;i<*numSubs;i++)//And now is necessary to finish dTheta/dX[i]
         {
             for (j=0;j<*numSubs;j++)
             {
-                dTheta_dXi[j]=dTheta_dXi[j]+3*x[i]*a3[i]*a3[i]*a2[i][j]/x[j];//This is the derivative for the second part for the second component of the pair
+                dTheta_dXi[i]=dTheta_dXi[i]+3*x[j]*a3[j]*a3[j]*a2[j][i];//This is the derivative of the second part for the second component of the pair
             }
-            dTheta_dXi[i]=dTheta_dXi[i]+pow(a3[i],3);//this is the derivative for the second part for the first component of the pair
+            dTheta_dXi[i]=dTheta_dXi[i]+pow(a3[i],3);//this is the derivative of the second part for the first component of the pair
         }
 
         break;
@@ -432,7 +466,7 @@ void CALLCONV FF_MixParamXderCubicEOS(const int *rule,const double *T,const int 
 
 //Calculates Theta,b,dTheta/dT, d2Theta/dT2, dTheta/dX[i], db/dX[i], dTheta_dXi for a mixture, given a cubic EOS,a mixing rule, composition, and pure substance parameters
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------
-void CALLCONV FF_MixParamTderCubicEOS(const enum FF_MixingRule *rule,const double *T,const int *numSubs,const  FF_CubicEOSdata data[],
+void CALLCONV FF_MixParamTderCubicEOS(const int *rule,const double *T,const int *numSubs,const  FF_CubicEOSdata data[],
         const double pintParam[15][15][6],const double x[], FF_CubicParam *param)
 {
     int i,j;
@@ -552,7 +586,7 @@ void CALLCONV FF_MixParamTderCubicEOS(const enum FF_MixingRule *rule,const doubl
 
         case FF_MKP://Mathias, Klotz and Prausnitz composition dependent mixing rule
         {
-            double lambda,dLambda,d2Lambda;
+            double kij,kji,lambda,dLambda,d2Lambda;
             double a2[*numSubs][*numSubs];//It is the secon part of combined Theta[i,j] calculation in MKP rule
             double da2[*numSubs][*numSubs];//Its derivative
             double d2a2[*numSubs][*numSubs];//Its 2nd derivative
@@ -561,6 +595,7 @@ void CALLCONV FF_MixParamTderCubicEOS(const enum FF_MixingRule *rule,const doubl
             double d2a3[*numSubs];
 
             /**/
+            param->dTheta=0;
             for (i=0;i<*numSubs;i++)//We calculate b, theta, dTheta/dT, and d2Theta/dT for the mix
             {
                 a3[i]=0;
@@ -578,9 +613,12 @@ void CALLCONV FF_MixParamTderCubicEOS(const enum FF_MixingRule *rule,const doubl
                     d2Co=-0.25*pow(Pr,-1.5)*dPr*dPr+0.5*pow(Pr,-0.5)*d2Pr;
                     //printf("i,j k: %i %i %f\n",i,j,pintParam[i][j][0]);
                     //Three values are used for the calculation of the mixture parameter k[i,j]=k[j,i], the forth for l[i,j]=l[j,i], used in the calculation of b[i,j]
-                    k=pintParam[i][j][0] + pintParam[i][j][1]* *T + pintParam[i][j][2]/ *T ;
-                    dk=pintParam[i][j][1]-pintParam[i][j][2]/(*T * *T);
-                    d2k=2* pintParam[i][j][2]/(*T * *T * *T);
+                    kij=pintParam[i][j][0] + pintParam[i][j][1]* *T+pintParam[i][j][2]/ *T ;//using same coef than Panagiotopoulos-Reid
+                    kji=pintParam[j][i][0] + pintParam[j][i][1]* *T+pintParam[j][i][2]/ *T ;
+                    k=0.5*(kij+kji);
+                    //k=pintParam[i][j][0] + pintParam[i][j][1]* *T + pintParam[i][j][2]/ *T ;
+                    dk=0.5*(pintParam[i][j][1]+pintParam[j][i][1]-(pintParam[i][j][2]+pintParam[j][i][2])/(*T * *T));
+                    d2k=(pintParam[i][j][2]+pintParam[i][j][2])/(*T * *T * *T);
                     //printf("i,j k,dk,d2k: %i %i %f %f %f\n",i,j,k,dk,d2k);
                     a=Co*(1-k);
                     da=dCo*(1-k)-Co*dk;
@@ -589,21 +627,27 @@ void CALLCONV FF_MixParamTderCubicEOS(const enum FF_MixingRule *rule,const doubl
                     param->dTheta=param->dTheta+x[i]*x[j]*da;
                     param->d2Theta=param->d2Theta+x[i]*x[j]*d2a;
                     //printf("a,da,d2a[i][j]: %i %i %f %f %f\n",i,j,a*1e3,da*1e3,d2a*1e3);
-                    b=(sParam[i].b+sParam[j].b)/2;
+                    l=pintParam[i][j][3];
+                    b=(1-l)*(sParam[i].b+sParam[j].b)/2;
                     param->b=param->b+x[i]*x[j]*b;
 
                     //Now the additional part
                     if(i!=j){
-                        lambda=pintParam[j][i][3] + pintParam[j][i][4]* *T + pintParam[j][i][5]/ *T ;
-                        dLambda=pintParam[j][i][4] -pintParam[j][i][5]/(*T * *T);
-                        d2Lambda=2* pintParam[j][i][5]/(*T * *T * *T);
-                        a2[i][j]= x[j]*pow(fabs(Co*lambda),0.333333);
+                        lambda=kji-kij;
+                        dLambda=pintParam[j][i][1]-pintParam[i][j][1]+(pintParam[i][j][2]-pintParam[j][i][2])/(*T * *T);
+                        d2Lambda=2*(pintParam[j][i][2]-pintParam[i][j][2])/(*T * *T * *T);
+                        //lambda=pintParam[j][i][3] + pintParam[j][i][4]* *T + pintParam[j][i][5]/ *T ;
+                        //dLambda=pintParam[j][i][4] -pintParam[j][i][5]/(*T * *T);
+                        //d2Lambda=2* pintParam[j][i][5]/(*T * *T * *T);
+                        a2[i][j]= x[j]*pow(fabs(Co*lambda),(1.0/3.0));
+                        //da2[i][j]=x[j]*(dCo*lambda+Co*dLambda)/(pow(fabs(Co*lambda),0.6666667)*3);
+                        da2[i][j]=x[j]*pow(fabs(Co*lambda),(-2.0/3.0))*(dCo*lambda+Co*dLambda)/3;
+                        d2a2[i][j]=-2*da2[i][j]*da2[i][j]/a2[i][j]+a2[i][j]*(d2Co*lambda+2*dCo*dLambda+Co*d2Lambda)/(3*Co*lambda);
                         if (lambda<0){
                             a2[i][j]=-a2[i][j];
+                            //da2[i][j]=-da2[i][j];
                             //d2a2[i][j]=-d2a2[i][j];
                         }
-                        da2[i][j]=x[j]*(dCo*lambda+Co*dLambda)/(pow(fabs(Co*lambda),0.6666667)*3);
-                        d2a2[i][j]=-2*da2[i][j]*da2[i][j]/a2[i][j]+a2[i][j]*(d2Co*lambda+2*dCo*dLambda+Co*d2Lambda)/(3*Co*lambda);
                     }
                     else{
                         a2[i][j]=0;
@@ -619,9 +663,11 @@ void CALLCONV FF_MixParamTderCubicEOS(const enum FF_MixingRule *rule,const doubl
                     d2a3[i]=d2a3[i]+d2a2[i][j];
 
                 }
+
                 param->Theta=param->Theta+x[i]*pow(a3[i],3);//We increase Theta and its derivatives in the part special for MKP
                 param->dTheta=param->dTheta+x[i]*3*pow(a3[i],2)*da3[i];
                 param->d2Theta=param->d2Theta+x[i]*3*(2*a3[i]*da3[i]*da3[i]+a3[i]*a3[i]*d2a3[i]);
+                //printf("a3:%f da3:%f d2a3:%f Theta:%f dTheta_dT:%f d2Theta_dT2:%f\n",a3[i],da3[i],d2a3[i],param->Theta,param->dTheta,param->d2Theta);
             }
             break;
         }
@@ -629,7 +675,7 @@ void CALLCONV FF_MixParamTderCubicEOS(const enum FF_MixingRule *rule,const doubl
             param->Theta=0;
             param->b=0;
             param->c=0;
-            break; 
+            break;
     }
     //printf("Theta:%f dTheta:%f d2Theta:%f b:%f\n",param->Theta,param->dTheta,param->d2Theta,param->b);
 }
@@ -812,6 +858,7 @@ void CALLCONV FF_MixParamCubicEOSOld(const enum FF_EOS eos[],const enum FF_Mixin
 //Calculates Theta,b and c, given a cubic EOS,excess G, composition, and pure substance parameters
 //------------------------------------------------------------------------------------------------
 void CALLCONV FF_MixParamCubicEOSgE(const FF_MixData *mix,const double *T,const double x[], FF_CubicParam *param){
+        int ver=0;
         int i,j;
         FF_SubsActivityData actData[mix->numSubs];
         FF_ExcessData excData={0,0,0,0};
@@ -844,14 +891,14 @@ void CALLCONV FF_MixParamCubicEOSgE(const FF_MixData *mix,const double *T,const 
             excData.gER=excData.gER+x[i]*actData[i].lnGammaR;
         }
         excData.gE=excData.gEC+excData.gESG+excData.gER;
-        //printf("gE: %f %f %f %f\n",excData.gEC,excData.gESG,excData.gER,excData.gE);
+        if (ver==1) printf("gE: %f %f %f %f\n",excData.gEC,excData.gESG,excData.gER,excData.gE);
 
         //Next we get the parameters of the individual substances
         for (i=0;i< mix->numSubs;i++)//First we get the parameters of the individual substances
         {
             FF_FixedParamCubic(&mix->cubicData[i],&sParam[i]);
             FF_ThetaDerivCubic(T,&mix->cubicData[i],&sParam[i]);
-            //printf("i a,b,Theta,dTheta,d2Theta: %i %f %f %f %f %f\n",i,sParam[i].a,sParam[i].b,sParam[i].Theta*1e3,sParam[i].dTheta*1e3,sParam[i].d2Theta*1e3);
+            if (ver==1) printf("i a,b,Theta,dTheta,d2Theta: %i %f %f %f %f %f\n",i,sParam[i].a,sParam[i].b,sParam[i].Theta*1e3,sParam[i].dTheta*1e3,sParam[i].d2Theta*1e3);
         }
         param->Theta=0;
         param->b=0;
@@ -859,7 +906,10 @@ void CALLCONV FF_MixParamCubicEOSgE(const FF_MixData *mix,const double *T,const 
         param->u=sParam[0].u;
         param->w=sParam[0].w;
         for (i=0;i< mix->numSubs;i++){
-            if (!((sParam[i].u==param->u)&&(sParam[i].w==param->w))) return;//We check that all cubic eos are of the same type
+            if (!((sParam[i].u==param->u)&&(sParam[i].w==param->w))) {
+                printf("Different type of cubic EOS\n");
+                return;//We check that all cubic eos are of the same type
+            }
             if (sParam[i].c>0) param->c=param->c+x[i]*sParam[i].c;//Calculation of mix volume translation
         }
 
@@ -976,7 +1026,7 @@ void CALLCONV FF_MixParamCubicEOSgE(const FF_MixData *mix,const double *T,const 
             break;
         }
 
-    //printf("Theta:%f b:%f c:%f\n",param->Theta,param->b,param->c);
+    if (ver==1) printf("Theta:%f b:%f c:%f\n",param->Theta,param->b,param->c);
 }
 
 //Calculates Theta,b,c and their composition derivatives, given a cubic EOS,excess G, composition, and pure substance parameters
@@ -1031,7 +1081,10 @@ void CALLCONV FF_MixParamNderCubicEOSgE(const FF_MixData *mix,const double *T,co
         param->u=sParam[0].u;
         param->w=sParam[0].w;
         for (i=0;i< mix->numSubs;i++){
-            if (!((sParam[i].u==param->u)&&(sParam[i].w==param->w))) return;//We check that all cubic eos are of the same type
+            if (!((sParam[i].u==param->u)&&(sParam[i].w==param->w))){
+                printf("Cubic EOS are of different types\n");
+                return;//We check that all cubic eos are of the same type
+            }
         }
 
         double sPartA=0,sPartB=0,dPartB_dXi[mix->numSubs];//sum of individual substances contribution
@@ -1191,6 +1244,7 @@ void CALLCONV FF_MixParamNderCubicEOSgE(const FF_MixData *mix,const double *T,co
 //Calculates Theta,b,c and their temperature derivatives, given a cubic EOS,excess G, composition, and pure substance parameters
 //------------------------------------------------------------------------------------------------------------------------------
 void CALLCONV FF_MixParamTderCubicEOSgE(const FF_MixData *mix,const double *T,const double x[], FF_CubicParam *param){
+    int ver=0;
     int i,j;
     double dT=0.01;
     double Tplus,Tminus;//Temperature variation to obtain numeric temperature derivative of theta
@@ -1257,14 +1311,14 @@ void CALLCONV FF_MixParamTderCubicEOSgE(const FF_MixData *mix,const double *T,co
         d2gER=(dgER-((excData.gER-excDataMinus.gER)/dT))/dT;
         dgE=dgEC+dgESG+dgER;
         d2gE=d2gEC+d2gESG+d2gER;
-        //printf("gE: %f %f %f %f\n",excData.gEC,excData.gESG,excData.gER,excData.gE);
+        if (ver==1) printf("gE: %f %f %f %f\n",excData.gEC,excData.gESG,excData.gER,excData.gE);
 
         //Next we get the parameters of the individual substances
         for (i=0;i< mix->numSubs;i++)//First we get the parameters of the individual substances
         {
             FF_FixedParamCubic(&mix->cubicData[i],&sParam[i]);
             FF_ThetaDerivCubic(T,&mix->cubicData[i],&sParam[i]);
-            //printf("i a,b,Theta,dTheta,d2Theta: %i %f %f %f %f %f\n",i,sParam[i].a,sParam[i].b,sParam[i].Theta*1e3,sParam[i].dTheta*1e3,sParam[i].d2Theta*1e3);
+            if (ver==1) printf("i a,b,Theta,dTheta,d2Theta: %i %f %f %f %f %f\n",i,sParam[i].a,sParam[i].b,sParam[i].Theta*1e3,sParam[i].dTheta*1e3,sParam[i].d2Theta*1e3);
         }
         param->Theta=0;
         param->b=0;
@@ -1272,7 +1326,10 @@ void CALLCONV FF_MixParamTderCubicEOSgE(const FF_MixData *mix,const double *T,co
         param->u=sParam[0].u;
         param->w=sParam[0].w;
         for (i=0;i< mix->numSubs;i++){
-            if (!((sParam[i].u==param->u)&&(sParam[i].w==param->w))) return;//We check that all cubic eos are of the same type
+            if (!((sParam[i].u==param->u)&&(sParam[i].w==param->w))){
+                printf("Cubic EOS are of different types\n");
+                return;//We check that all cubic eos are of the same type
+            }
             if (sParam[i].c>0) param->c=param->c+x[i]*sParam[i].c;//Calculation of mix volume translation
         }
         double sPartA=0,sPartB=0;//sum of individual substances contribution
@@ -1304,7 +1361,7 @@ void CALLCONV FF_MixParamTderCubicEOSgE(const FF_MixData *mix,const double *T,co
                     param->b=param->b+x[i]*sParam[i].b;
                 }
                 for (i=0;i<mix->numSubs;i++){
-                    sPartA=sPartA+x[i]*log(param->b/sParam[i].b);                 
+                    sPartA=sPartA+x[i]*log(param->b/sParam[i].b);
                     sPartB=sPartB+x[i]*(sParam[i].Theta/sParam[i].b);
                     dsPartB=dsPartB+x[i]*(sParam[i].dTheta/sParam[i].b);
                     d2sPartB=d2sPartB+x[i]*(sParam[i].d2Theta/sParam[i].b);
@@ -1329,6 +1386,264 @@ void CALLCONV FF_MixParamTderCubicEOSgE(const FF_MixData *mix,const double *T,co
                     d2sPartB=d2sPartB+x[i]*(sParam[i].d2Theta/sParam[i].b);
                 }
                 param->Theta=param->b*(RT*(excData.gE+sPartA)/q1+sPartB);
+                param->dTheta=param->b*(R*(excData.gE+sPartA)/q1+RT*(dgE)/q1+dsPartB);
+                param->d2Theta=param->b*(2*R*dgE/q1+RT*d2gE/q1+d2sPartB);
+            }
+            break;
+        case FF_LCVM:
+            if (mix->eosType==FF_CubicPRtype)
+            {
+                q1=-0.52;//Am. Michelsen(zero pressure) part coefficient
+                q2=-0.623;//Av. Huron-Vidal(infinite pressure) part coefficient
+            }
+            if (mix->eosType==FF_CubicSRKtype)
+            {
+                q1=-0.593;//Am. Michelsen(zero pressure) part coefficient
+                q2=-0.693;//Av. Huron-Vidal(infinite pressure) part coefficient
+            }
+            if ((mix->actModel==FF_UNIFACStd)||(mix->actModel==FF_UNIFACPSRK)) lambda=0.36;
+            else if ((mix->actModel==FF_UNIFACDort)||(mix->actModel==FF_UNIFACNist)) lambda=0.65;
+            if (!(q1==0)){
+                for (i=0;i<mix->numSubs;i++){
+                    param->b=param->b+x[i]*sParam[i].b;
+                }
+                for (i=0;i<mix->numSubs;i++){
+                    sPartA=sPartA+x[i]*log(param->b/sParam[i].b);
+                    sPartB=sPartB+x[i]*(sParam[i].Theta/sParam[i].b);
+                    dsPartB=dsPartB+x[i]*(sParam[i].dTheta/sParam[i].b);
+                    d2sPartB=d2sPartB+x[i]*(sParam[i].d2Theta/sParam[i].b);
+                }
+                //param->Theta=param->b*(lambda*(RT*excData.gER/q2+sPartB)+(1-lambda)*(RT*(excData.gE+sPartA)/q1+sPartB));
+                param->Theta=param->b*(lambda*(RT*excData.gER/q2)+(1-lambda)*(RT*(excData.gE+sPartA)/q1)+sPartB);
+                param->dTheta=param->b*(lambda*(R*excData.gER+RT*dgER)/q2+(1-lambda)*(R*(excData.gE+sPartA)+RT*dgE)/q1+dsPartB);
+                param->d2Theta=param->b*(lambda*(2*R*dgER+RT*d2gER)/q2+(1-lambda)*(2*R*dgE+RT*d2gE)/q1+d2sPartB);
+            }
+            break;
+        case FF_MHV2:
+            if (mix->eosType==FF_CubicPRtype)
+            {
+                q1=-0.4347;
+                q2=-0.003654;
+            }
+            if (mix->eosType==FF_CubicSRKtype)
+            {
+                q1=-0.4783;
+                q2=-0.0047;
+            }
+            if (!(q2==0)){
+                double alphai,dalphai,d2alphai;
+                for (i=0;i<mix->numSubs;i++){
+                    param->b=param->b+x[i]*sParam[i].b;
+                }
+                for (i=0;i<mix->numSubs;i++){
+                    alphai=sParam[i].Theta/(sParam[i].b*RT);
+                    dalphai=sParam[i].dTheta/(sParam[i].b*RT)-alphai/ *T;
+                    //d2alphai=sParam[i].d2Theta/(sParam[i].b*RT)-dalphai/ *T-(dalphai* *T-alphai)/(*T * *T);
+                    d2alphai=sParam[i].d2Theta/(sParam[i].b*RT)-2*sParam[i].dTheta/(sParam[i].b*RT* *T)+2*sParam[i].Theta/(sParam[i].b*RT* *T * *T);
+                    sPartB=sPartB+x[i]*(log(param->b/sParam[i].b)+q1*alphai+q2*pow(alphai,2));
+                    dsPartB=dsPartB+x[i]*(q1*dalphai+2*q2*alphai*dalphai);
+                    d2sPartB=d2sPartB+x[i]*(q1*d2alphai+2*q2*(dalphai*dalphai+alphai*d2alphai));
+
+                }
+                double aux=q1*q1+4*q2*(sPartB+excData.gE);
+                double daux=4*q2*(dsPartB+dgE);
+                param->Theta=param->b*RT*(-q1-pow(aux,0.5))/(2*q2);
+                //printf("gE:%f Theta:%f\n",excData.gE,param->Theta);
+                param->dTheta=param->Theta/ *T-param->b*RT*pow(aux,-0.5)*(dsPartB+dgE);
+                //printf("dTheta:%f\n",param->dTheta);
+                param->d2Theta=(param->dTheta* *T-param->Theta)/(*T * *T)-param->b*R*(pow(aux,-0.5)*(dsPartB+dgE)+
+                               *T*(-0.5*pow(aux,-1.5)*daux*(dsPartB+dgE)+pow(aux,-0.5)*(d2sPartB+d2gE)));
+            }
+            break;
+        case FF_UMR:
+            if (mix->eosType==FF_CubicPRtype) q1=-0.53;
+            else if (mix->eosType==FF_CubicSRKtype) q1=-0.593;
+            if (!(q1==0)){
+                for(i=0;i<mix->numSubs;i++){
+                    for(j=0;j<mix->numSubs;j++){
+                        bij=pow((pow(sParam[i].b,0.5)+pow(sParam[j].b,0.5))/2,2);
+                        param->b=param->b+x[i]*x[j]*bij;
+                    }
+                }
+                for (i=0;i<mix->numSubs;i++){
+                    sPartB=sPartB+x[i]*(sParam[i].Theta/sParam[i].b);
+                    dsPartB=dsPartB+x[i]*(sParam[i].dTheta/sParam[i].b);
+                    d2sPartB=d2sPartB+x[i]*(sParam[i].d2Theta/sParam[i].b);
+                }
+                param->Theta=param->b*(RT*(excData.gER)/q1+sPartB);
+                param->dTheta=param->b*(R*(excData.gER)/q1+RT*(dgER)/q1+dsPartB);
+                param->d2Theta=param->b*(2*R*dgER/q1+RT*d2gE/q1+d2sPartB);
+            }
+            break;
+        default:
+            param->c=0;
+            param->b=0;
+            param->Theta=0;
+            param->dTheta=0;
+            param->d2Theta=0;
+            break;
+        }
+    if (ver==1) printf("Theta:%f dTheta:%f d2Theta:%f b:%f c:%f\n",param->Theta,param->dTheta, param->d2Theta, param->b,param->c);
+}
+
+
+//Calculates Theta,b,c and their temperature derivatives, given a cubic EOS,excess G, composition, and pure substance parameters
+//------------------------------------------------------------------------------------------------------------------------------
+void CALLCONV FF_MixParamTderCubicEOSgE2(const FF_MixData *mix,const double *T,const double x[], FF_CubicParam *param){
+    int ver=0;
+    int i,j;
+    double dT=0.01;
+    double Tplus,Tminus,ThetaPlus,ThetaMinus;//Temperature variation to obtain numeric temperature derivative of theta
+    Tplus=*T + dT;
+    Tminus=*T-dT;
+    FF_SubsActivityData actData[mix->numSubs],actDataPlus[mix->numSubs],actDataMinus[mix->numSubs];
+    //FF_SubsActivityData actDataPlus[mix->numSubs];
+    FF_ExcessData excData={0,0,0,0},excDataPlus={0,0,0,0},excDataMinus={0,0,0,0};
+    //FF_ExcessData excDataPlus={0,0,0,0};
+    FF_CubicParam sParam[mix->numSubs],sParamPlus[mix->numSubs],sParamMinus[mix->numSubs];
+    double RT=R* *T;//to speed up
+    double bij;//used to calculate the combined b for substances i,j
+    double dgEC,dgESG,dgER,dgE;//derivatives og gE regarding T
+    double d2gEC,d2gESG,d2gER,d2gE;//second derivatives og gE regarding T
+    //First we need to get activity. The data needed is inside the mix structure
+    //printf("Act model: %i\n",mix->actModel);
+    switch(mix->actModel){
+    case FF_UNIFACStd:
+        FF_ActivityUNIFAC(&mix->unifStdData,T,x,actData);
+        FF_ActivityUNIFAC(&mix->unifStdData,&Tplus,x,actDataPlus);
+        FF_ActivityUNIFAC(&mix->unifStdData,&Tminus,x,actDataMinus);
+        break;
+    case FF_UNIFACPSRK:
+        FF_ActivityUNIFAC(&mix->unifPSRKData,T,x,actData);
+        FF_ActivityUNIFAC(&mix->unifPSRKData,&Tplus,x,actDataPlus);
+        FF_ActivityUNIFAC(&mix->unifPSRKData,&Tminus,x,actDataMinus);
+        break;
+    case FF_UNIFACDort:
+        FF_ActivityUNIFAC(&mix->unifDortData,T,x,actData);
+        FF_ActivityUNIFAC(&mix->unifDortData,&Tplus,x,actDataPlus);
+        FF_ActivityUNIFAC(&mix->unifDortData,&Tminus,x,actDataMinus);
+        break;
+    case FF_UNIFACNist:
+        FF_ActivityUNIFAC(&mix->unifNistData,T,x,actData);
+        FF_ActivityUNIFAC(&mix->unifNistData,&Tplus,x,actDataPlus);
+        FF_ActivityUNIFAC(&mix->unifNistData,&Tminus,x,actDataMinus);
+        break;
+    default:
+        FF_Activity(mix,T,x,actData);
+        FF_Activity(mix,&Tplus,x,actDataPlus);
+        FF_Activity(mix,&Tminus,x,actDataMinus);
+        break;
+    }
+        //Now we obtain excess gE
+        for(i=0;i<mix->numSubs;i++){
+            excData.gEC=excData.gEC+x[i]*actData[i].lnGammaC;
+            excData.gESG=excData.gESG+x[i]*actData[i].lnGammaSG;
+            excData.gER=excData.gER+x[i]*actData[i].lnGammaR;
+            excDataPlus.gEC=excDataPlus.gEC+x[i]*actDataPlus[i].lnGammaC;
+            excDataPlus.gESG=excDataPlus.gESG+x[i]*actDataPlus[i].lnGammaSG;
+            excDataPlus.gER=excDataPlus.gER+x[i]*actDataPlus[i].lnGammaR;
+            excDataMinus.gEC=excDataMinus.gEC+x[i]*actDataMinus[i].lnGammaC;
+            excDataMinus.gESG=excDataMinus.gESG+x[i]*actDataMinus[i].lnGammaSG;
+            excDataMinus.gER=excDataMinus.gER+x[i]*actDataMinus[i].lnGammaR;
+        }
+        excData.gE=excData.gEC+excData.gESG+excData.gER;
+        excDataPlus.gE=excDataPlus.gEC+excDataPlus.gESG+excDataPlus.gER;
+        excDataMinus.gE=excDataMinus.gEC+excDataMinus.gESG+excDataMinus.gER;
+        /*dgEC=(excDataPlus.gEC-excData.gEC)/dT;
+        d2gEC=(dgEC-((excData.gEC-excDataMinus.gEC)/dT))/dT;
+        dgESG=(excDataPlus.gESG-excData.gESG)/dT;
+        d2gESG=(dgESG-((excData.gESG-excDataMinus.gESG)/dT))/dT;
+        dgER=(excDataPlus.gER-excData.gER)/dT;
+        d2gER=(dgER-((excData.gER-excDataMinus.gER)/dT))/dT;
+        dgE=dgEC+dgESG+dgER;
+        d2gE=d2gEC+d2gESG+d2gER;
+        if (ver==1) printf("gE: %f %f %f %f\n",excData.gEC,excData.gESG,excData.gER,excData.gE);*/
+
+        //Next we get the parameters of the individual substances
+        for (i=0;i< mix->numSubs;i++)//First we get the parameters of the individual substances
+        {
+            FF_FixedParamCubic(&mix->cubicData[i],&sParam[i]);
+            FF_ThetaDerivCubic(T,&mix->cubicData[i],&sParam[i]);
+            FF_ThetaDerivCubic(&Tplus,&mix->cubicData[i],&sParamPlus[i]);
+            FF_ThetaDerivCubic(&Tminus,&mix->cubicData[i],&sParamMinus[i]);
+            if (ver==1) printf("i a,b,Theta,dTheta,d2Theta: %i %f %f %f %f %f\n",i,sParam[i].a,sParam[i].b,sParam[i].Theta*1e3,sParam[i].dTheta*1e3,sParam[i].d2Theta*1e3);
+        }
+        param->Theta=0;
+        param->b=0;
+        param->c=0;
+        param->u=sParam[0].u;
+        param->w=sParam[0].w;
+        for (i=0;i< mix->numSubs;i++){
+            if (!((sParam[i].u==param->u)&&(sParam[i].w==param->w))){
+                printf("Cubic EOS are of different types\n");
+                return;//We check that all cubic eos are of the same type
+            }
+            if (sParam[i].c>0) param->c=param->c+x[i]*sParam[i].c;//Calculation of mix volume translation
+        }
+        double sPartA=0,sPartB=0,sPartBplus=0,sPartBminus=0;//sum of individual substances contribution
+        double dsPartB=0,d2sPartB=0;//Its derivatives regarding T
+        double q1=0,q2=0,lambda=0;//Parameters for  alpha (and Theta) calculation, lambda is for LCVM mixing rule
+
+        switch (mix->mixRule)
+        {
+        case FF_HV:
+            if (mix->eosType==FF_CubicPRtype) q1=-0.623;
+            else if (mix->eosType==FF_CubicSRKtype) q1=-0.693;
+            if (!(q1==0)){
+                for (i=0;i<mix->numSubs;i++){
+                    param->b=param->b+x[i]*sParam[i].b;
+                    sPartB=sPartB+x[i]*(sParam[i].Theta/sParam[i].b);
+                    dsPartB=dsPartB+x[i]*(sParam[i].dTheta/sParam[i].b);
+                    d2sPartB=d2sPartB+x[i]*(sParam[i].d2Theta/sParam[i].b);
+                }
+                param->Theta=param->b*(RT*(excData.gESG+excData.gER)/q1+sPartB);
+                param->dTheta=param->b*(R*(excData.gESG+excData.gER)/q1+RT*(dgESG+dgER)/q1+dsPartB);
+                param->d2Theta=param->b*(2*R*(dgESG+dgER)/q1+RT*(d2gESG+d2gER)/q1+d2sPartB);
+            }
+            break;
+        case FF_MHV1:
+            if (mix->eosType==FF_CubicPRtype) q1=-0.53;
+            else if (mix->eosType==FF_CubicSRKtype) q1=-0.593;
+            if (!(q1==0)){
+                for (i=0;i<mix->numSubs;i++){
+                    param->b=param->b+x[i]*sParam[i].b;
+                }
+                for (i=0;i<mix->numSubs;i++){
+                    sPartA=sPartA+x[i]*log(param->b/sParam[i].b);
+                    sPartB=sPartB+x[i]*(sParam[i].Theta/sParam[i].b);
+                    sPartBplus=sPartBplus+x[i]*(sParamPlus[i].Theta/sParam[i].b);
+                    sPartBminus=sPartBminus+x[i]*(sParamMinus[i].Theta/sParam[i].b);
+                    //dsPartB=dsPartB+x[i]*(sParam[i].dTheta/sParam[i].b);
+                    //d2sPartB=d2sPartB+x[i]*(sParam[i].d2Theta/sParam[i].b);
+                }
+                param->Theta=param->b*(RT*(excData.gE+sPartA)/q1+sPartB);
+                ThetaPlus=param->b*(R*Tplus*(excDataPlus.gE+sPartA)/q1+sPartBplus);
+                ThetaMinus=param->b*(R*Tminus*(excDataMinus.gE+sPartA)/q1+sPartBminus);
+                //printf("gE:%f Theta:%f\n",excData.gE,param->Theta);
+                param->dTheta=(ThetaPlus-param->Theta)/dT;
+                param->d2Theta=(ThetaPlus-2*param->Theta+ThetaMinus)/(dT*dT);
+                //param->dTheta=param->b*(R*(excData.gE+sPartA)/q1+RT*(dgE)/q1+dsPartB);
+                //printf("dTheta:%f\n",param->dTheta);
+                //param->d2Theta=param->b*(2*R*dgE/q1+RT*d2gE/q1+d2sPartB);
+            }
+            break;
+        case FF_PSRK:
+            if (mix->eosType==FF_CubicSRKtype){
+                q1=-0.64663;
+                for (i=0;i<mix->numSubs;i++){
+                    param->b=param->b+x[i]*sParam[i].b;
+                }
+                for (i=0;i<mix->numSubs;i++){
+                    sPartA=sPartA+x[i]*log(param->b/sParam[i].b);
+                    sPartB=sPartB+x[i]*(sParam[i].Theta/sParam[i].b);
+                    sPartBplus=sPartBplus+x[i]*(sParamPlus[i].Theta/sParam[i].b);
+                    sPartBminus=sPartBminus+x[i]*(sParamMinus[i].Theta/sParam[i].b);
+                    //dsPartB=dsPartB+x[i]*(sParam[i].dTheta/sParam[i].b);
+                    //d2sPartB=d2sPartB+x[i]*(sParam[i].d2Theta/sParam[i].b);
+                }
+                param->Theta=param->b*(RT*(excData.gE+sPartA)/q1+sPartB);
+                ThetaPlus=param->b*(R*Tplus*(excDataPlus.gE+sPartA)/q1+sPartBplus);
+                ThetaMinus=param->b*(R*Tminus*(excDataMinus.gE+sPartA)/q1+sPartBminus);
                 param->dTheta=param->b*(R*(excData.gE+sPartA)/q1+RT*(dgE)/q1+dsPartB);
                 param->d2Theta=param->b*(2*R*dgE/q1+RT*d2gE/q1+d2sPartB);
             }
@@ -1425,25 +1740,23 @@ void CALLCONV FF_MixParamTderCubicEOSgE(const FF_MixData *mix,const double *T,co
             param->d2Theta=0;
             break;
         }
-
-    //printf("Theta:%f dTheta: %f b:%f c:%f\n",param->Theta,param->dTheta,param->b,param->c);
-
+    if (ver==1) printf("Theta:%f dTheta:%f d2Theta:%f b:%f c:%f\n",param->Theta,param->dTheta, param->d2Theta, param->b,param->c);
 }
-
 
 //Mixture SAFT EOS calculations
 //==============================
 
-//Z and Arr calculation for a mixture, given T and V, according to FF_PCSAFT EOS
+//Z and Arr calculation for a mixture, given T and V, according to FF_PCSAFT EOS. combRul=2
 //------------------------------------------------------------------------------
-CALLCONV FF_MixArrZfromTVSAFT(const enum FF_MixingRule *rule,const double *T,const double *V,const int *numSubs,
-                                        const  FF_SaftEOSdata data[],const double pintParam[15][15][6],const double x[],double *Arr,double *Z)
+void CALLCONV FF_MixArrZfromTVSAFT(const enum FF_MixingRule *rule,const double *T,const double *V,const int *numSubs,
+                                          FF_SaftEOSdata data[],const double pintParam[15][15][6],const double x[],double *Arr,double *Z)
 {
     //Initial calculations: molecular volume, molecular density, and hard molecule volume fraction, etc.
     int i,j,k;
     double Vmolecular,rhoM,mM=0.0,substRho[*numSubs],d[*numSubs],pairSigma[*numSubs][*numSubs],pairEpsilon[*numSubs][*numSubs],
             pairD[*numSubs][*numSubs],pairKAB[*numSubs][*numSubs],pairEpsilonAB[*numSubs][*numSubs];
-    double Add=0,Zdd=0;//New declarations
+    double Add=0,Zdd=0;
+    double acidAux;
     Vmolecular = *V / Av;
     rhoM = 1 / Vmolecular;
     for (i=0;i<*numSubs;i++)
@@ -1452,7 +1765,10 @@ CALLCONV FF_MixArrZfromTVSAFT(const enum FF_MixingRule *rule,const double *T,con
         substRho[i]=x[i]*rhoM;
         d[i] = data[i].sigma * (1 - 0.12 * exp(-3 * data[i].epsilon / *T))*1e-10;//Diameter of each segment of the chain in m
     }
-    int combRul=2;
+    //************
+    //int combRul=2;
+    //************
+
     for (i=0;i<*numSubs;i++)
         for (j=0;j<*numSubs;j++)
         {
@@ -1460,7 +1776,18 @@ CALLCONV FF_MixArrZfromTVSAFT(const enum FF_MixingRule *rule,const double *T,con
             //pairEpsilon[i][j]=pow((data[i].epsilon*data[j].epsilon),0.5);
             pairEpsilon[i][j]=(1-pintParam[i][j][0]-pintParam[i][j][1]* *T -pintParam[i][j][2]/ *T)*pow((data[i].epsilon*data[j].epsilon),0.5);
             pairD[i][j]=(d[i]+d[j])/2;
-            switch (combRul)
+
+            if ((*rule==FF_IndAssoc)&&(data[i].nPos==1)&&(data[i].kAB==0)) data[i].kAB=data[j].kAB;
+            else if ((*rule==FF_IndAssoc)&&(data[j].nPos==1)&&(data[j].kAB==0)) data[j].kAB=data[i].kAB;
+            //printf("kAB:%f \n",data[i].kAB);
+
+            //if (data[i].kAB==0) pairKAB[i][j]=data[j].kAB;//if only one substance is associating, we use its kAB
+            //else if (data[j].kAB==0) pairKAB[i][j]=data[i].kAB;
+            pairKAB[i][j]=pow((data[i].kAB*data[j].kAB),0.5)*pow(2*pow(data[i].sigma*data[j].sigma,0.5)/(data[i].sigma+data[j].sigma),3);
+            pairEpsilonAB[i][j]=(data[i].epsilonAB+data[j].epsilonAB)/2;
+
+
+            /*switch (combRul)
             {
             case 1://CR-1 combining rule: (epsilonAB+epsilonAB)/2, kAB=(kAB*kAB)^0.5
                 if (data[i].kAB==0) pairKAB[i][j]=data[j].kAB;//if only one substance is associating, we use its kAB
@@ -1469,11 +1796,21 @@ CALLCONV FF_MixArrZfromTVSAFT(const enum FF_MixingRule *rule,const double *T,con
                 pairEpsilonAB[i][j]=(data[i].epsilonAB+data[j].epsilonAB)/2;
                 break;
             case 2://CR-1 modified by Wolbach and Sandler
-                if (data[i].kAB==0) pairKAB[i][j]=data[j].kAB;//if only one substance is associating, we use its kAB
-                else if (data[j].kAB==0) pairKAB[i][j]=data[i].kAB;
-                else pairKAB[i][j]=pow((data[i].kAB*data[j].kAB),0.5)*pow(2*pow(data[i].sigma*data[j].sigma,0.5)/(data[i].sigma+data[j].sigma),3);
+                //if (data[i].kAB==0) pairKAB[i][j]=data[j].kAB;//if only one substance is associating, we use its kAB
+                //else if (data[j].kAB==0) pairKAB[i][j]=data[i].kAB;
+                pairKAB[i][j]=pow((data[i].kAB*data[j].kAB),0.5)*pow(2*pow(data[i].sigma*data[j].sigma,0.5)/(data[i].sigma+data[j].sigma),3);
                 pairEpsilonAB[i][j]=(data[i].epsilonAB+data[j].epsilonAB)/2;
                 break;
+
+            case 6://CR-1 modified by Wolbach and Sandler, to use with cross-association.
+                if ((data[i].kAB==0)&&(1==1)){
+                    data[i].kAB=data[j].kAB;
+                    data[i].epsilonAB=data[j].epsilonAB;
+                }
+                pairKAB[i][j]=pow((data[i].kAB*data[j].kAB),0.5)*pow(2*pow(data[i].sigma*data[j].sigma,0.5)/(data[i].sigma+data[j].sigma),3);
+                pairEpsilonAB[i][j]=(data[i].epsilonAB+data[j].epsilonAB)/2;
+                break;
+
             case 3://Gross and Sadowski
                 if (data[i].kAB==0) pairKAB[i][j]=data[j].kAB;//if only one substance is associating, we use its kAB
                 else if (data[j].kAB==0) pairKAB[i][j]=data[i].kAB;
@@ -1488,7 +1825,7 @@ CALLCONV FF_MixArrZfromTVSAFT(const enum FF_MixingRule *rule,const double *T,con
                 pairEpsilonAB[i][j]=pow((data[i].epsilonAB*data[j].epsilonAB),0.5);
                 break;
 
-            }
+            }*/
         }
     //Contribution by hard sphere
     double dseta[4],auxDseta,Zhs,Ahs;
@@ -1509,7 +1846,7 @@ CALLCONV FF_MixArrZfromTVSAFT(const enum FF_MixingRule *rule,const double *T,con
         {
             pairGhs[i][j]=1/(1-dseta[3])+(d[i]*d[j]/(d[i]+d[j]))*3*dseta[2]/pow((1-dseta[3]),2)+
             pow((d[i]*d[j]/(d[i]+d[j])),2)*2*pow(dseta[2],2)/pow((1-dseta[3]),3);
-            pairDelta[i][j]=pow(pairD[i][j],3)*pairGhs[i][j]*pairKAB[i][j]*(exp(pairEpsilonAB[i][j]/ *T)-1);//This will be used in contribution by molecular association
+            pairDelta[i][j]=pow(pairSigma[i][j],3)*pairGhs[i][j]*pairKAB[i][j]*(exp(pairEpsilonAB[i][j]/ *T)-1);//This will be used in contribution by molecular association
         }
         //Now we calculate d(ln(ghs(di))/d(rhoM) for each substance
         dLghs_drho[i] =(dseta[3]/pow((1-dseta[3]),2)+3*d[i]*dseta[2]/2/pow((1-dseta[3]),2)+3*d[i]*dseta[2]*dseta[3]/pow((1-dseta[3]),3)+
@@ -1543,39 +1880,46 @@ CALLCONV FF_MixArrZfromTVSAFT(const enum FF_MixingRule *rule,const double *T,con
 
     //contribution by molecular association
     double xPos[*numSubs],xNeg[*numSubs],xAcid[*numSubs],Aassoc=0.0,Zassoc=0.0;//Fraction of non associated sites in each molecule
-    for (i=0;i<*numSubs;i++)
+    for (i=0;i<*numSubs;i++) //initial values for the non-associated fraction
     {
         if (data[i].nPos>0) xPos[i]=xNeg[i]=0.5; else xPos[i]=xNeg[i]=1.0;
-        if (data[i].nAcid>0) xAcid[i]=0.5; else xAcid[i]=1.0;
+        if (data[i].nAcid==0) xAcid[i]=1.0;
+        else if (data[i].nAcid==1) xAcid[i]=(-1 + pow((1 + 4 * substRho[i] * pairDelta[i][i]),0.5)) / (2 * substRho[i] * pairDelta[i][i]);
+        else if (data[i].nAcid==2) xAcid[i]=(-1 + pow((1 + 8 * substRho[i] * pairDelta[i][i]),0.5)) / (4 * substRho[i] * pairDelta[i][i]);
+        else if (data[i].nAcid==3) xAcid[i]=(-1 + pow((1 + 12 * substRho[i] * pairDelta[i][i]),0.5)) / (6 * substRho[i] * pairDelta[i][i]);
+        else if (data[i].nAcid==4) xAcid[i]=(-1 + pow((1 + 16 * substRho[i] * pairDelta[i][i]),0.5)) / (8 * substRho[i] * pairDelta[i][i]);
+        //printf("xAcid[%i]:%f \n",i,xAcid[i]);
     }
-    for (k=0;k<13;k++) //This is a iteration to approximate non associated fraction
-        for (i=0;i<*numSubs;i++)
-        {
+    for (k=0;k<13;k++){ //This is a iteration to approximate non associated fraction
+        for (i=0;i<*numSubs;i++){
             if (data[i].nPos>0)
             {
                 xPos[i]=0.0;
                 for (j=0;j<*numSubs;j++)
-                    xPos[i]=xPos[i]+substRho[j]*(data[j].nNeg*xNeg[j]+data[j].nAcid*xAcid[j])*pairDelta[i][j];
+                    xPos[i]=xPos[i]+substRho[j]*(data[j].nNeg*xNeg[j])*pairDelta[i][j];
                 xPos[i]=1/(1+xPos[i]);
             }
             if (data[i].nNeg>0)
             {
                 xNeg[i]=0.0;
                 for (j=0;j<*numSubs;j++)
-                    xNeg[i]=xNeg[i]+substRho[j]*(data[j].nPos*xPos[j]+data[j].nAcid*xAcid[j])*pairDelta[i][j];
+                    xNeg[i]=xNeg[i]+substRho[j]*(data[j].nPos*xPos[j])*pairDelta[i][j];
                 xNeg[i]=1/(1+xNeg[i]);
             }
+
             if (data[i].nAcid>0)
             {
-                xAcid[i]=0.0;
+                acidAux=0;
                 for (j=0;j<*numSubs;j++)
-                    xAcid[i]=xAcid[i]+substRho[j]*(data[j].nNeg*xNeg[j]+data[j].nPos*xPos[j])*pairDelta[i][j];
-                xAcid[i]=1/(1+xAcid[i]);
-
-            }
+                    acidAux=acidAux+substRho[j]*data[j].nAcid*xAcid[j]*pairDelta[i][j];
+                    xAcid[i]=1/(1+acidAux);
+                                }
+            //printf("K:%i xPos[%i]:%f xNeg[%i]:%f xAcid:%f \n",k,i,xPos[i],i,xNeg[i],xAcid[i]);
         }
-    for (i=0;i<*numSubs;i++)
-    {
+    }
+    //for (i=0;i<*numSubs;i++) printf("xPos[%i]:%f xNeg[%i]:%f xAcid[%i]:%f substRho[%i]:%e pairDelta[%i][%i]:%e \n",i,xPos[i],i,xNeg[i],i,xAcid[i],i,substRho[i],i,i,pairDelta[1][1]);
+    for (i=0;i<*numSubs;i++){
+
         Aassoc=Aassoc+x[i]*(((data[i].nPos+data[i].nNeg+data[i].nAcid)/2)+data[i].nPos*(log(xPos[i])-xPos[i]/2)+data[i].nNeg*(log(xNeg[i])-xNeg[i]/2)+
                             data[i].nAcid*(log(xAcid[i])-xAcid[i]/2));
         Zassoc=Zassoc+x[i]*(data[i].nPos*(1-xPos[i])+data[i].nNeg*(1-xNeg[i])+data[i].nAcid*(1-xAcid[i]));
@@ -2036,7 +2380,7 @@ void CALLCONV FF_MixVfromTPSAFT(const enum FF_MixingRule *rule,const double *T,c
             resultG[2]=Z;
             if (*state=='l'){
                 if (fabs((resultL[0]-resultG[0])/resultL[0])>0.001) *state='b';
-                else state='u';
+                else *state='u';
             }
             else *state='g';
             //printf("hola\n");
@@ -2090,22 +2434,22 @@ void CALLCONV FF_MixPfromTVeos(const FF_MixData *mix,const double *T,const doubl
         //    break;
         case FF_SAFTtype:
             //*( FF_SaftEOSdata*) data;
-            FF_MixArrZfromTVSAFT(mix->mixRule,T,V,mix->numSubs,mix->saftData,mix->intParam,x,&Arr,&Z);
+            FF_MixArrZfromTVSAFT(&mix->mixRule,T,V,&mix->numSubs,mix->saftData,mix->intParam,x,&Arr,&Z);
             //printf("T:%f V:%f Z:%f\n",*T,*V,Z);
             *P=Z*R* *T/ *V;
             break;
         case FF_SWtype:
-            //FF_PfromTVsw(T,V,data,P);
+            //FF_PfromTVsw(*T,*V,data,P);
             break;
         default://if we have a cubic eos the first step is to calculate its parameters
             if((mix->mixRule==FF_VdW)||(mix->mixRule==FF_VdWnoInt)||(mix->mixRule==FF_PR)||(mix->mixRule==FF_MKP)){
-                FF_MixParamXderCubicEOS(mix->mixRule,T,mix->numSubs,mix->cubicData,mix->intParam,x,&param,da_di,db_di,dc_di);
+                FF_MixParamXderCubicEOS(&mix->mixRule,T,&mix->numSubs,mix->cubicData,mix->intParam,x,&param,da_di,db_di,dc_di);
             }
             else{
                 FF_MixParamCubicEOSgE(mix,T,x,&param);
                 //FF_MixParamTderCubicEOSgE(mix,T,x,&param);
             }
-            FF_PfromTVcubic(T,V,&param,P);
+            FF_PfromTVcubic(*T,*V,&param,P);
             break;
     }
 }
@@ -2131,7 +2475,7 @@ void CALLCONV FF_MixVfromTPeos(const FF_MixData *mix,const double *T,const doubl
             break;
         case FF_SWtype:
             //*( FF_SWEOSdata*) data;
-            //FF_VfromTPsw(eos,T,P,data,option,resultL,resultG,state);
+            //FF_VfromTPsw(eos,*T,*P,data,*option,resultL,resultG,state);
             break;
         default://Cubic eos
             //For a cubic EOs is always necessary to obtain first its parameters
@@ -2142,7 +2486,7 @@ void CALLCONV FF_MixVfromTPeos(const FF_MixData *mix,const double *T,const doubl
                 FF_MixParamCubicEOSgE(mix,T,x,&param);
             }
             //printf("Theta:%f, b:%f\n",param.Theta,param.b);
-            FF_VfromTPcubic(T,P,&param,option,resultL,resultG,state);
+            FF_VfromTPcubic(*T,*P,&param,*option,resultL,resultG,state);
             break;
     }
 
@@ -2205,7 +2549,7 @@ EXP_IMP void CALLCONV FF_MixPhiEOS(const FF_MixData *mix,const double *T,const d
     default:
         if ((mix->mixRule==FF_VdW)||(mix->mixRule==FF_VdWnoInt)||(mix->mixRule==FF_PR)||(mix->mixRule==FF_MKP)){
             FF_MixParamXderCubicEOS(&mix->mixRule,T,&mix->numSubs,mix->cubicData,mix->intParam,x,&param,da_di,db_di,dc_di);
-            FF_VfromTPcubic(T,P,&param,option,resultL,resultG,&state);
+            FF_VfromTPcubic(*T,*P,&param,*option,resultL,resultG,&state);
             if(*option=='l'){
                 V=resultL[0];
                 Arr=resultL[1];
@@ -2234,10 +2578,10 @@ EXP_IMP void CALLCONV FF_MixPhiEOS(const FF_MixData *mix,const double *T,const d
                 //printf("phi[%i]: %f\n",i,phi[i]);
             }
         }
-        else{
+        else{//gE mixing rule
             FF_MixParamNderCubicEOSgE(mix,T,x,&param,da_di,db_di);
             double B=*P*param.b/(R* *T);
-            FF_VfromTPcubic(T,P,&param,option,resultL,resultG,&state);
+            FF_VfromTPcubic(*T,*P,&param,*option,resultL,resultG,&state);
             if(*option=='l'){
                 V=resultL[0];
                 Arr=resultL[1];
@@ -2270,7 +2614,7 @@ EXP_IMP void CALLCONV FF_MixPhiEOScubic(const FF_MixData *mix,FF_CubicParam *par
     double V,Arr,Z,resultL[3],resultG[3],dArr_dXi[mix->numSubs],sumdArr_dXi=0;
     double B=*P*param->b/(R* *T);
     if ((mix->mixRule==FF_VdW)||(mix->mixRule==FF_VdWnoInt)||(mix->mixRule==FF_PR)||(mix->mixRule==FF_MKP)){
-        FF_VfromTPcubic(T,P,&param,option,resultL,resultG,&state);
+        FF_VfromTPcubic(*T,*P,param,*option,resultL,resultG,&state);
         if(*option=='l'){
             V=resultL[0];
             Arr=resultL[1];
@@ -2300,7 +2644,7 @@ EXP_IMP void CALLCONV FF_MixPhiEOScubic(const FF_MixData *mix,FF_CubicParam *par
         }
     }
     else{
-        FF_VfromTPcubic(T,P,param,option,resultL,resultG,&state);
+        FF_VfromTPcubic(*T,*P,param,*option,resultL,resultG,&state);
         if(*option=='l'){
             V=resultL[0];
             Arr=resultL[1];
@@ -2322,9 +2666,8 @@ EXP_IMP void CALLCONV FF_MixPhiEOScubic(const FF_MixData *mix,FF_CubicParam *par
 }
 
 //Mixture Ideal gas thermodynamic properties calculation, from a reference state, specified by T and P, where H and S are 0
-void CALLCONV FF_MixIdealThermoEOS(const int *numSubs,const  FF_Correlation cp0[],const double x[],double *refT,double *refP, FF_ThermoProperties *th0)
+void CALLCONV FF_MixIdealThermoEOS(const int *numSubs,const  FF_Correlation cp0[], const FF_BaseProp baseProp[], const double x[],double *refT,double *refP, FF_ThermoProperties *th0)
 {
-    //printf("Hola, soy FF_MixIdealThermoEOS\n");
      FF_ThermoProperties th0S;//Ideal thermodynamic properties of the selected substance
     int i;
     th0S.T=th0->T;
@@ -2333,11 +2676,13 @@ void CALLCONV FF_MixIdealThermoEOS(const int *numSubs,const  FF_Correlation cp0[
     //printf("I am going for individual calculation. Num subs: %i\n",*numSubs);
     //printf("%i %f %f %f %f %f\n",equation[0],coef[0][0],coef[0][1],coef[0][2],coef[0][3],coef[0][4]);
     for (i=0;i<*numSubs;i++){
-        FF_IdealThermoEOS(&cp0[i].form,cp0[i].coef,refT,refP,&th0S);
+        th0S.MW=baseProp[i].MW;
+        FF_IdealThermoEos(cp0[i].form,cp0[i].coef,*refT,*refP,&th0S);
         th0->Cp=th0->Cp+x[i]*th0S.Cp;
         th0->H=th0->H+x[i]*th0S.H;
         th0->S=th0->S+x[i]*(th0S.S-log(x[i]));
     }
+    //printf("Ideal cp mix:%f\n",th0->Cp);
     th0->Cv=th0->Cp-R;
     th0->U=th0->H-R*(th0->T- *refT);//We need to substrat the integration of d(P*V)=d(R*T)=R*dT from reference T to actual T
     th0->A=th0->U-th0->T*th0->S;
@@ -2359,7 +2704,7 @@ void CALLCONV FF_MixResidualThermoEOS(FF_MixData *mix,FF_PhaseThermoProp *thR)
             delta=1/(thR->V*((( FF_SWEOSdata*)data)->rhoRef));
             tau=((( FF_SWEOSdata*)data)->tRef)/thR->T;
             //printf("delta:%f  tau:%f\n",delta,tau);
-            //FF_ArrDerSW(&tau,&delta,data,ArrDer);
+            //FF_ArrDerSW(tau,delta,data,ArrDer);
             break;*/
         default://Cubic EOS
             switch(mix->mixRule){
@@ -2377,7 +2722,7 @@ void CALLCONV FF_MixResidualThermoEOS(FF_MixData *mix,FF_PhaseThermoProp *thR)
             }
         //else//gE mixing rules
             //printf("thR.T: %f thR.V: %f\n",thR->T,thR->V);
-            FF_ArrDerCubic(&thR->T,&thR->V,&param,thR->ArrDer);
+            FF_ArrDerCubic(thR->T,thR->V,&param,thR->ArrDer);
             break;
     }
     //printf("Arr:%f dArr/dV:%f d2Arr/dV2:%f dArr/dT:%f d2Arr/dT2:%f d2Arr/dVdT:%f\n",thR->ArrDer[0],thR->ArrDer[1],thR->ArrDer[2],
@@ -2431,7 +2776,7 @@ void CALLCONV FF_MixThermoEOS(FF_MixData *mix,double *refT,double *refP, FF_Phas
     th0.T=thR.T=th->T;
     th0.V=thR.V=th->V;
     //printf("Now going to calculate Ideal part\n");
-    FF_MixIdealThermoEOS(&mix->numSubs,mix->cp0Corr,th->c,refT,refP,&th0);
+    FF_MixIdealThermoEOS(&mix->numSubs,mix->cp0Corr,mix->baseProp,th->c,refT,refP,&th0);
     if (mix->eosType==FF_IdealType)
     {
         th->P=R*th->T/th->V;
